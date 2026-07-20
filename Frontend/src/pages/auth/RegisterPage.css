@@ -1,0 +1,106 @@
+/* ===========================
+   Register Page
+   =========================== */
+
+.register-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl) var(--spacing-md);
+  background: var(--color-bg);
+}
+
+.register-page__container {
+  width: 100%;
+  max-width: 460px;
+}
+
+.register-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-lg);
+  transition: color var(--transition-fast);
+}
+
+.register-page__back:hover {
+  color: var(--color-text);
+}
+
+.register-page__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.register-page__title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-xs);
+}
+
+.register-page__subtitle {
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.register-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.register-page__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.register-page__terms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.register-page__terms a {
+  font-weight: 500;
+}
+
+.register-page__staff-note {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
+
+.register-page__login-link {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-lg);
+}
+
+/* ===========================
+   Responsive
+   =========================== */
+
+@media (max-width: 430px) {
+  .register-page__row {
+    grid-template-columns: 1fr;
+  }
+
+  .register-page {
+    padding: var(--spacing-md);
+  }
+}

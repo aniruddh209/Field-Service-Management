@@ -1,0 +1,68 @@
+/* ===========================
+   404 Not Found Page
+   =========================== */
+
+.not-found {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  background: var(--color-bg);
+}
+
+.not-found__content {
+  text-align: center;
+  max-width: 420px;
+}
+
+.not-found__icon {
+  color: var(--color-warning);
+  margin-bottom: var(--spacing-md);
+}
+
+.not-found__code {
+  font-size: 5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  margin-bottom: var(--spacing-sm);
+}
+
+.not-found__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+}
+
+.not-found__message {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: var(--spacing-xl);
+  line-height: 1.6;
+}
+
+.not-found__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 24px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.not-found__btn:hover {
+  background: var(--color-primary-hover);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}

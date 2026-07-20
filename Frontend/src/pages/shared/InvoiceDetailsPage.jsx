@@ -1,0 +1,296 @@
+import React, { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, CreditCard, CheckCircle, Clock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext.jsx'
+import { getInvoiceById, payInvoice } from '../../services/invoiceService.js'
+import { markAsPaid } from '../../services/serviceRequestService.js'
+import { formatCurrency, formatDate } from '../../utils/format.js'
+import StatusBadge from '../../components/ui/StatusBadge.jsx'
+import Modal from '../../components/ui/Modal.jsx'
+import { LoadingState, ErrorState } from '../../components/ui/PageStates.jsx'
+import PageContainer from '../../components/layout/PageContainer.jsx'
+
+function InvoiceDetailsPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  
+  const [invoice, setInvoice] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isError, setIsError] = useState(false)
+
+  // Payment dialog states
+  const [showPayModal, setShowPayModal] = useState(false)
+  const [isPaying, setIsPaying] = useState(false)
+  const [successToast, setSuccessToast] = useState('')
+
+  async function load() {
+    try {
+      setIsLoading(true)
+      const data = await getInvoiceById(id)
+      if (!data) { setIsError(true); return }
+      
+      // Customer privacy check: customers can only view their own invoices
+      if (user?.role === 'Customer' && data.customerId !== user?.id) { 
+        setIsError(true)
+        return 
+      }
+      setInvoice(data)
+    } catch (err) {
+      console.error(err)
+      setIsError(true)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [id, user])
+
+  const handleSimulatePayment = async () => {
+    setIsPaying(true)
+    try {
+      // 1. Mark invoice as Paid in invoiceService
+      await payInvoice(invoice.id)
+
+      // 2. Mark service request as Paid in serviceRequestService
+      await markAsPaid(invoice.serviceRequestId, user.id)
+
+      setIsPaying(false)
+      setShowPayModal(false)
+      
+      setSuccessToast('Payment successfully simulated! Status updated to Paid.')
+      setTimeout(() => setSuccessToast(''), 4000)
+      
+      // Reload details
+      load()
+    } catch (err) {
+      console.error(err)
+      setIsPaying(false)
+    }
+  }
+
+  if (isLoading) return <PageContainer><LoadingState message="Loading invoice details..." /></PageContainer>
+  if (isError || !invoice) return <PageContainer><ErrorState message="Invoice not found." onRetry={() => navigate(-1)} /></PageContainer>
+
+  const isCustomer = user?.role === 'Customer'
+  const backPath = isCustomer ? '/customer/invoices' : '/management/invoices'
+  const isUnpaid = invoice.status !== 'Paid'
+
+  return (
+    <PageContainer>
+      {/* Toast Notification */}
+      {successToast && (
+        <div style={{
+          position: 'fixed', top: 20, right: 20, zIndex: 1000,
+          background: 'var(--color-success)', color: 'white',
+          padding: '12px 24px', borderRadius: 'var(--radius-md)',
+          boxShadow: 'var(--dropdown-shadow)', fontSize: '0.88rem',
+          fontWeight: 600, animation: 'fadeIn 0.2s ease'
+        }}>
+          {successToast}
+        </div>
+      )}
+
+      <button className="btn btn--ghost btn--sm" onClick={() => navigate(backPath)} style={{ marginBottom: 12 }}>
+        <ArrowLeft size={16} /> Back to Invoices
+      </button>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, maxWidth: 800, margin: '0 auto' }}>
+        
+        {/* Payment callout alert */}
+        {isCustomer && isUnpaid && (
+          <div style={{
+            padding: '16px 20px', background: 'var(--color-warning-light)',
+            border: '1px solid var(--color-warning)', borderRadius: 'var(--radius-lg)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12
+          }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <Clock size={20} style={{ color: 'var(--color-warning)' }} />
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>Payment is Pending</p>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Due date: {formatDate(invoice.dueDate)}</p>
+              </div>
+            </div>
+            <button className="btn btn--primary btn--sm" onClick={() => setShowPayModal(true)}>
+              <CreditCard size={14} style={{ marginRight: 6 }} /> Pay Now
+            </button>
+          </div>
+        )}
+
+        {invoice.status === 'Paid' && (
+          <div style={{
+            padding: '16px 20px', background: 'var(--color-success-light)',
+            border: '1px solid var(--color-success)', borderRadius: 'var(--radius-lg)',
+            display: 'flex', gap: 10, alignItems: 'center'
+          }}>
+            <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '0.88rem', color: 'var(--color-success)' }}>Payment Confirmed</p>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Paid on: {formatDate(invoice.paidAt || invoice.issuedAt)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Invoice Container Sheet */}
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 32 }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid var(--color-border)', paddingBottom: 20, marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--color-primary)', margin: 0 }}>FIELD SERVICE</h2>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem', margin: '2px 0 0 0' }}>Professional Maintenance & Repairs</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>INVOICE</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', margin: '4px 0 0 0' }}>Number: <strong>{invoice.invoiceNumber}</strong></p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, fontSize: '0.88rem', marginBottom: 24 }}>
+            <div>
+              <p style={{ fontWeight: 600, color: 'var(--color-text-tertiary)', margin: '0 0 4px 0', textTransform: 'uppercase', fontSize: '0.75rem' }}>Bill To</p>
+              <p style={{ fontWeight: 700, margin: '0 0 2px 0' }}>{invoice.customerName}</p>
+              <p style={{ margin: '0 0 2px 0', color: 'var(--color-text-secondary)' }}>arjun.mehta@example.com</p>
+              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Kalawad Road, Rajkot</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontWeight: 600, color: 'var(--color-text-tertiary)', margin: '0 0 4px 0', textTransform: 'uppercase', fontSize: '0.75rem' }}>Details</p>
+              <p style={{ margin: '0 0 2px 0' }}>Request ID: <strong>{invoice.requestNumber}</strong></p>
+              <p style={{ margin: '0 0 2px 0' }}>Service: {invoice.serviceName}</p>
+              <p style={{ margin: '0 0 2px 0' }}>Issued: {formatDate(invoice.issuedAt)}</p>
+              <p style={{ margin: 0 }}>Due Date: <strong>{formatDate(invoice.dueDate)}</strong></p>
+            </div>
+          </div>
+
+          {/* Charges details table */}
+          <div className="data-table-wrap" style={{ marginBottom: 24 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Rate</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Service fee */}
+                <tr>
+                  <td>{invoice.serviceName} Base Service Fee</td>
+                  <td>1</td>
+                  <td>{formatCurrency(invoice.serviceCharge || invoice.serviceAmount - (invoice.labourCharge || 0))}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.serviceCharge || invoice.serviceAmount - (invoice.labourCharge || 0))}</td>
+                </tr>
+                {/* Labour */}
+                {(invoice.labourCharge > 0 || (invoice.serviceAmount - (invoice.serviceCharge || 500) > 0)) && (
+                  <tr>
+                    <td>Service Labour Operations</td>
+                    <td>1</td>
+                    <td>{formatCurrency(invoice.labourCharge || invoice.serviceAmount - 500)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.labourCharge || invoice.serviceAmount - 500)}</td>
+                  </tr>
+                )}
+                {/* Parts */}
+                {(invoice.parts || []).map((p, idx) => (
+                  <tr key={idx}>
+                    <td>{p.partName || p.name}</td>
+                    <td>{p.quantity}</td>
+                    <td>{formatCurrency(p.unitPrice)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(p.quantity * p.unitPrice)}</td>
+                  </tr>
+                ))}
+                {/* Additional */}
+                {(invoice.additionalCharges || []).map((c, idx) => (
+                  <tr key={idx}>
+                    <td>{c.description}</td>
+                    <td>1</td>
+                    <td>{formatCurrency(c.amount)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(c.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals Breakdown block */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.88rem', marginBottom: 24 }}>
+            <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal:</span>
+                <span>{formatCurrency(invoice.serviceAmount + (invoice.partsAmount || 0))}</span>
+              </div>
+              {invoice.discountAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-danger)' }}>
+                  <span>Discount:</span>
+                  <span>- {formatCurrency(invoice.discountAmount)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Tax (GST):</span>
+                <span>{formatCurrency(invoice.taxAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 700, borderTop: '2px solid var(--color-border)', paddingTop: 8, color: 'var(--color-primary)' }}>
+                <span>Grand Total:</span>
+                <span>{formatCurrency(invoice.totalAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Warranty details */}
+          {invoice.warrantyDays > 0 && (
+            <div style={{ background: 'var(--color-surface-secondary)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)', marginBottom: 20, fontSize: '0.82rem' }}>
+              <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ShieldCheck size={16} /> Warranty Cover Included
+              </p>
+              <p style={{ margin: 0 }}>Period: <strong>{invoice.warrantyDays} Days</strong>. Notes: {invoice.warrantyNotes || 'Covers parts replaced.'}</p>
+            </div>
+          )}
+
+          <div style={{ fontSize: '0.82rem', color: 'var(--color-text-tertiary)', borderTop: '1px solid var(--color-border-light)', paddingTop: 12 }}>
+            <p style={{ margin: '0 0 4px 0' }}>Notes: {invoice.notes || 'Thank you for choosing Field Service.'}</p>
+            <p style={{ margin: 0 }}>Due Date: {formatDate(invoice.dueDate)}</p>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Payment simulation modal */}
+      <Modal isOpen={showPayModal} onClose={() => setShowPayModal(false)} title="Payment Summary" size="sm">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: 16, background: 'var(--color-surface-secondary)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', marginBottom: 8 }}>
+              <span style={{ color: 'var(--color-text-secondary)' }}>Invoice Number:</span>
+              <span style={{ fontWeight: 600 }}>{invoice.invoiceNumber}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', marginBottom: 8 }}>
+              <span style={{ color: 'var(--color-text-secondary)' }}>Service Type:</span>
+              <span>{invoice.serviceName}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 700, borderTop: '1px solid var(--color-border-light)', paddingTop: 8, marginTop: 8 }}>
+              <span>Total Amount:</span>
+              <span style={{ color: 'var(--color-primary)' }}>{formatCurrency(invoice.totalAmount)}</span>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)', margin: 0 }}>
+            * This is a simulated checkout session. No real banking details are required or charged.
+          </p>
+
+          <div className="form-actions">
+            <button className="btn btn--outline" onClick={() => setShowPayModal(false)} disabled={isPaying}>
+              Cancel
+            </button>
+            <button className="btn btn--primary" onClick={handleSimulatePayment} disabled={isPaying}>
+              {isPaying ? 'Processing...' : 'Simulate Payment'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+    </PageContainer>
+  )
+}
+
+export default InvoiceDetailsPage
