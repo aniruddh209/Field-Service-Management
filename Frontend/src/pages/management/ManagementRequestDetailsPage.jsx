@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, UserPlus, Eye, FileText, CheckCircle, Sparkles, XCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getServiceRequestById, getStatusHistory, startReview, assignTechnician, closeRequest } from '../../services/serviceRequestService.js'
-import { getAvailableTechnicians } from '../../services/technicianService.js'
+import {
+    getTechnicians
+} from "../../services/technicianService";
 import { getWorkReportByRequestId } from '../../services/workReportService.js'
 import { formatDate, formatStatus } from '../../utils/format.js'
 import StatusBadge from '../../components/ui/StatusBadge.jsx'
@@ -50,17 +52,21 @@ function ManagementRequestDetailsPage() {
     load()
   }
 
-  async function openAssignModal() {
-    const techs = await getAvailableTechnicians()
-    setTechnicians(techs)
+async function openAssignModal() {
+    const techs = await getTechnicians()
+
+    // Only show active technicians
+    const available = techs.filter(t => t.isActive)
+
+    setTechnicians(available)
     setSelectedTechId(null)
     setShowAssignModal(true)
-  }
+}
 
   async function handleAssign() {
     if (!selectedTechId) return
     const tech = technicians.find(t => t.id === selectedTechId)
-    await assignTechnician(request.id, tech.id, `${tech.firstName} ${tech.lastName}`, user.id)
+    await assignTechnician(request.id, tech.id, tech.fullName, user.id)
     setShowAssignModal(false)
     load()
   }
@@ -227,10 +233,10 @@ function ManagementRequestDetailsPage() {
             >
               <div className="data-card__body" style={{ padding: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <p style={{ fontWeight: 600 }}>{tech.firstName} {tech.lastName}</p>
+                  <p style={{ fontWeight: 600 }}>{tech.fullName}</p>
                   <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>{tech.specialization} · ⭐ {tech.rating}</p>
                 </div>
-                <span className={`badge badge--completed`}>{tech.employmentStatus || 'Active'}</span>
+                <span className={`badge badge--completed`}>{tech.status || 'Available'}</span>
               </div>
             </div>
           ))}

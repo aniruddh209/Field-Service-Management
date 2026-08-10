@@ -59,12 +59,11 @@ function ManagementTechniciansPage() {
     const status = getTechnicianStatus(t)
     const matchesStatus = statusFilter === 'All' || status === statusFilter
 
-    const fullName = `${t.firstName} ${t.lastName}`.toLowerCase()
     const matchesSearch = search === '' ||
-      fullName.includes(search.toLowerCase()) ||
-      t.employeeCode.toLowerCase().includes(search.toLowerCase()) ||
-      t.specialization.toLowerCase().includes(search.toLowerCase()) ||
-      t.phoneNumber.includes(search)
+      (t.fullName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.employeeCode || '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.specialization || '').toLowerCase().includes(search.toLowerCase()) ||
+      (t.phone || '').includes(search)
 
     return matchesSearch && matchesStatus
   })
@@ -167,10 +166,10 @@ function ManagementTechniciansPage() {
                           display: 'flex', alignItems: 'center', justifyContent: 'center', 
                           fontWeight: 700, fontSize: '0.82rem', flexShrink: 0 
                         }}>
-                          {tech.firstName[0]}{tech.lastName[0]}
+                          {tech.fullName ? tech.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : '??'}
                         </div>
                         <div>
-                          <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{tech.firstName} {tech.lastName}</h3>
+                          <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{tech.fullName}</h3>
                           <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>{tech.employeeCode}</span>
                         </div>
                       </div>
@@ -183,11 +182,11 @@ function ManagementTechniciansPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Star size={13} style={{ color: 'var(--color-warning)' }} />
                           <span>
-                            {tech.rating > 0 ? `${tech.rating} rating` : 'New'} · Active Jobs: {tech.activeJobCount}
+                            {tech.rating > 0 ? `${tech.rating} rating` : 'New'} · Active Jobs: {tech.activeJobs}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Phone size={13} /> <span>{tech.phoneNumber}</span>
+                          <Phone size={13} /> <span>{tech.phone}</span>
                         </div>
                       </div>
                     </div>

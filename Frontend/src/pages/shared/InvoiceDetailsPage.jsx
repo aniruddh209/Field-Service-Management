@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, CreditCard, CheckCircle, Clock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, CreditCard, CheckCircle, Clock, AlertTriangle, ShieldCheck, Download } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getInvoiceById, payInvoice } from '../../services/invoiceService.js'
+import { getInvoiceById, payInvoice, downloadInvoicePdf } from '../../services/invoiceService.js'
 import { markAsPaid } from '../../services/serviceRequestService.js'
 import { formatCurrency, formatDate } from '../../utils/format.js'
 import StatusBadge from '../../components/ui/StatusBadge.jsx'
@@ -93,11 +93,18 @@ function InvoiceDetailsPage() {
         </div>
       )}
 
-      <button className="btn btn--ghost btn--sm" onClick={() => navigate(backPath)} style={{ marginBottom: 12 }}>
-        <ArrowLeft size={16} /> Back to Invoices
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <button className="btn btn--ghost btn--sm" onClick={() => navigate(backPath)}>
+          <ArrowLeft size={16} /> Back to Invoices
+        </button>
+
+        <button className="btn btn--primary btn--sm" onClick={() => downloadInvoicePdf(invoice.id, invoice.invoiceNumber)}>
+          <Download size={14} style={{ marginRight: 6 }} /> Download Invoice (PDF)
+        </button>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, maxWidth: 800, margin: '0 auto' }}>
+
         
         {/* Payment callout alert */}
         {isCustomer && isUnpaid && (

@@ -26,7 +26,7 @@
 
 import { serviceRequestsData } from '../data/serviceRequestsData.js';
 import { statusHistoryData } from '../data/statusHistoryData.js';
-import { techniciansData } from '../data/techniciansData.js';
+import { getTechnicianById } from './technicianService.js';
 import { createNotification } from './notificationService.js';
 
 let requests = [...serviceRequestsData];
@@ -167,18 +167,20 @@ export async function assignTechnician(requestId, technicianId, technicianName, 
   req.assignedTechnicianName = technicianName;
   addHistoryEntry(req.id, 'Assigned', userId, `Assigned to ${technicianName}`);
 
-  // Notify technician (Ravi Kumar maps to userId 4)
-  const tech = techniciansData.find(t => t.id === Number(technicianId));
-  if (tech && tech.userId) {
-    await createNotification({
-      userId: tech.userId,
-      title: 'New job assigned',
-      message: `You have been assigned to ${req.requestNumber} — ${req.serviceName} for ${req.customerName}.`,
-      type: 'Assignment',
-      relatedEntityType: 'ServiceRequest',
-      relatedEntityId: req.id
-    });
-  }
+  // Notify technician
+  try {
+    const tech = await getTechnicianById(Number(technicianId));
+    if (tech && tech.userId) {
+      await createNotification({
+        userId: tech.userId,
+        title: 'New job assigned',
+        message: `You have been assigned to ${req.requestNumber} — ${req.serviceName} for ${req.customerName}.`,
+        type: 'Assignment',
+        relatedEntityType: 'ServiceRequest',
+        relatedEntityId: req.id
+      });
+    }
+  } catch (e) { /* technician lookup failed, skip notification */ }
 
   return Promise.resolve({ ...req });
 }
@@ -327,17 +329,19 @@ export async function approveWork(requestId, userId) {
   addHistoryEntry(req.id, 'Completed', userId, 'Completion report approved by management');
 
   // Notify Technician
-  const tech = techniciansData.find(t => t.id === req.assignedTechnicianId);
-  if (tech && tech.userId) {
-    await createNotification({
-      userId: tech.userId,
-      title: 'Report approved',
-      message: `Your completion report for ${req.requestNumber} has been approved.`,
-      type: 'Assignment',
-      relatedEntityType: 'ServiceRequest',
-      relatedEntityId: req.id
-    });
-  }
+  try {
+    const tech = await getTechnicianById(req.assignedTechnicianId);
+    if (tech && tech.userId) {
+      await createNotification({
+        userId: tech.userId,
+        title: 'Report approved',
+        message: `Your completion report for ${req.requestNumber} has been approved.`,
+        type: 'Assignment',
+        relatedEntityType: 'ServiceRequest',
+        relatedEntityId: req.id
+      });
+    }
+  } catch (e) { /* technician lookup failed, skip notification */ }
 
   return Promise.resolve({ ...req });
 }
@@ -352,17 +356,19 @@ export async function returnForCorrection(requestId, userId, reason) {
   addHistoryEntry(req.id, 'WorkCompleted', userId, `Report returned for correction: "${reason}"`);
 
   // Notify Technician
-  const tech = techniciansData.find(t => t.id === req.assignedTechnicianId);
-  if (tech && tech.userId) {
-    await createNotification({
-      userId: tech.userId,
-      title: 'Correction requested',
-      message: `Correction requested for ${req.requestNumber}: "${reason}".`,
-      type: 'Assignment',
-      relatedEntityType: 'ServiceRequest',
-      relatedEntityId: req.id
-    });
-  }
+  try {
+    const tech = await getTechnicianById(req.assignedTechnicianId);
+    if (tech && tech.userId) {
+      await createNotification({
+        userId: tech.userId,
+        title: 'Correction requested',
+        message: `Correction requested for ${req.requestNumber}: "${reason}".`,
+        type: 'Assignment',
+        relatedEntityType: 'ServiceRequest',
+        relatedEntityId: req.id
+      });
+    }
+  } catch (e) { /* technician lookup failed, skip notification */ }
 
   return Promise.resolve({ ...req });
 }

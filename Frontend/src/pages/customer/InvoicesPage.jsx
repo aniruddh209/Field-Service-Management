@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Receipt, FileText, Search } from 'lucide-react'
+import { Receipt, FileText, Search, Download, Eye } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getCustomerInvoices } from '../../services/invoiceService.js'
+import { getCustomerInvoices, downloadInvoicePdf } from '../../services/invoiceService.js'
 import { formatCurrency, formatDate } from '../../utils/format.js'
 import StatusBadge from '../../components/ui/StatusBadge.jsx'
 import { LoadingState, EmptyState } from '../../components/ui/PageStates.jsx'
@@ -76,17 +76,35 @@ function InvoicesPage() {
                 <th>Date</th>
                 <th>Amount</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(inv => (
-                <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/customer/invoices/${inv.id}`)}>
+                <tr key={inv.id}>
                   <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{inv.invoiceNumber}</td>
                   <td>{inv.serviceName}</td>
                   <td style={{ color: 'var(--color-text-tertiary)' }}>{inv.requestNumber}</td>
                   <td>{formatDate(inv.issuedAt)}</td>
                   <td style={{ fontWeight: 600 }}>{formatCurrency(inv.totalAmount)}</td>
                   <td><StatusBadge status={invoiceStatusMap[inv.status] || inv.status} /></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        className="btn btn--outline btn--sm"
+                        onClick={() => navigate(`/customer/invoices/${inv.id}`)}
+                      >
+                        <Eye size={12} style={{ marginRight: 4 }} /> View
+                      </button>
+                      <button
+                        className="btn btn--primary btn--sm"
+                        onClick={() => downloadInvoicePdf(inv.id, inv.invoiceNumber)}
+                        title="Download Invoice PDF"
+                      >
+                        <Download size={12} style={{ marginRight: 4 }} /> PDF
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -96,5 +114,6 @@ function InvoicesPage() {
     </PageContainer>
   )
 }
+
 
 export default InvoicesPage

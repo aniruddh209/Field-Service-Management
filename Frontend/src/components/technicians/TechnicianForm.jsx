@@ -13,18 +13,16 @@ export const specializations = [
 
 function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCancel, nextEmployeeCode = '' }) {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
-    phoneNumber: '',
+    phone: '',
     employeeCode: '',
     specialization: '',
-    employmentStatus: 'Active',
+    status: 'Available',
     joiningDate: new Date().toISOString().split('T')[0],
     password: '',
     confirmPassword: '',
-    notes: '',
-    profilePhotoUrl: null
+    notes: ''
   })
 
   const [errors, setErrors] = useState({})
@@ -36,18 +34,16 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
   useEffect(() => {
     if (mode === 'edit' && initialValues) {
       setFormData({
-        firstName: initialValues.firstName || '',
-        lastName: initialValues.lastName || '',
+        fullName: initialValues.fullName || '',
         email: initialValues.email || '',
-        phoneNumber: initialValues.phoneNumber || '',
+        phone: initialValues.phone || '',
         employeeCode: initialValues.employeeCode || '',
         specialization: initialValues.specialization || '',
-        employmentStatus: initialValues.employmentStatus || 'Active',
-        joiningDate: initialValues.joiningDate || new Date().toISOString().split('T')[0],
+        status: initialValues.status || 'Available',
+        joiningDate: initialValues.joiningDate ? initialValues.joiningDate.split('T')[0] : new Date().toISOString().split('T')[0],
         password: '',
         confirmPassword: '',
-        notes: initialValues.notes || '',
-        profilePhotoUrl: initialValues.profilePhotoUrl || null
+        notes: initialValues.notes || ''
       })
     } else if (mode === 'create' && nextEmployeeCode) {
       setFormData(prev => ({ ...prev, employeeCode: nextEmployeeCode }))
@@ -57,24 +53,14 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
   const validate = () => {
     const newErrors = {}
 
-    // First Name
-    const firstNameTrim = formData.firstName.trim()
-    if (!firstNameTrim) {
-      newErrors.firstName = 'First name is required'
-    } else if (firstNameTrim.length < 2) {
-      newErrors.firstName = 'First name must contain at least 2 characters'
-    } else if (firstNameTrim.length > 50) {
-      newErrors.firstName = 'First name cannot exceed 50 characters'
-    }
-
-    // Last Name
-    const lastNameTrim = formData.lastName.trim()
-    if (!lastNameTrim) {
-      newErrors.lastName = 'Last name is required'
-    } else if (lastNameTrim.length < 2) {
-      newErrors.lastName = 'Last name must contain at least 2 characters'
-    } else if (lastNameTrim.length > 50) {
-      newErrors.lastName = 'Last name cannot exceed 50 characters'
+    // Full Name
+    const fullNameTrim = formData.fullName.trim()
+    if (!fullNameTrim) {
+      newErrors.fullName = 'Full name is required'
+    } else if (fullNameTrim.length < 3) {
+      newErrors.fullName = 'Full name must contain at least 3 characters'
+    } else if (fullNameTrim.length > 100) {
+      newErrors.fullName = 'Full name cannot exceed 100 characters'
     }
 
     // Email
@@ -89,15 +75,15 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
     }
 
     // Phone (10 digits Indian mobile)
-    const phoneTrim = formData.phoneNumber.trim()
+    const phoneTrim = formData.phone.trim()
     if (!phoneTrim) {
-      newErrors.phoneNumber = 'Phone number is required'
+      newErrors.phone = 'Phone number is required'
     } else {
       const cleanPhone = phoneTrim.replace(/\D/g, '')
       if (cleanPhone.length !== 10) {
-        newErrors.phoneNumber = 'Phone number must contain exactly 10 digits'
+        newErrors.phone = 'Phone number must contain exactly 10 digits'
       } else if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-        newErrors.phoneNumber = 'Enter a valid 10-digit mobile number'
+        newErrors.phone = 'Enter a valid 10-digit mobile number'
       }
     }
 
@@ -109,11 +95,6 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
     // Specialization
     if (!formData.specialization) {
       newErrors.specialization = 'Please select a specialization'
-    }
-
-    // Employment Status
-    if (!formData.employmentStatus) {
-      newErrors.employmentStatus = 'Please select an employment status'
     }
 
     // Password validation (only in create mode)
@@ -167,21 +148,24 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
 
     setIsSubmitting(true)
     try {
-      // Prepare payload to submit
+      // Prepare payload matching ASP.NET Technician model
       const submissionData = {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim().toLowerCase(),
-        phoneNumber: formData.phoneNumber.trim().replace(/\D/g, ''),
+        phone: formData.phone.trim().replace(/\D/g, ''),
         employeeCode: formData.employeeCode.trim(),
         specialization: formData.specialization,
-        employmentStatus: formData.employmentStatus,
+        status: formData.status,
         joiningDate: formData.joiningDate,
         notes: formData.notes.trim()
       }
 
       if (mode === 'create') {
-        submissionData.temporaryPassword = formData.password // Passed in demo create payload
+        submissionData.temporaryPassword = formData.password
+      }
+
+      if (mode === 'edit' && initialValues) {
+        submissionData.id = initialValues.id
       }
 
       await onSubmit(submissionData)
@@ -206,36 +190,19 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
         A. Personal Information
       </h4>
       
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label form-label--required" htmlFor="firstName">First Name</label>
-          <input
-            id="firstName"
-            name="firstName"
-            type="text"
-            className={`form-input ${errors.firstName ? 'form-input--error' : ''}`}
-            placeholder="e.g. Ravi"
-            value={formData.firstName}
-            onChange={handleChange}
-            disabled={isSubmitting}
-          />
-          {errors.firstName && <span className="form-error">{errors.firstName}</span>}
-        </div>
-
-        <div className="form-group">
-          <label className="form-label form-label--required" htmlFor="lastName">Last Name</label>
-          <input
-            id="lastName"
-            name="lastName"
-            type="text"
-            className={`form-input ${errors.lastName ? 'form-input--error' : ''}`}
-            placeholder="e.g. Kumar"
-            value={formData.lastName}
-            onChange={handleChange}
-            disabled={isSubmitting}
-          />
-          {errors.lastName && <span className="form-error">{errors.lastName}</span>}
-        </div>
+      <div className="form-group">
+        <label className="form-label form-label--required" htmlFor="fullName">Full Name</label>
+        <input
+          id="fullName"
+          name="fullName"
+          type="text"
+          className={`form-input ${errors.fullName ? 'form-input--error' : ''}`}
+          placeholder="e.g. Ravi Kumar"
+          value={formData.fullName}
+          onChange={handleChange}
+          disabled={isSubmitting}
+        />
+        {errors.fullName && <span className="form-error">{errors.fullName}</span>}
       </div>
 
       <div className="form-row">
@@ -255,18 +222,18 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
         </div>
 
         <div className="form-group">
-          <label className="form-label form-label--required" htmlFor="phoneNumber">Phone Number (Indian Mobile)</label>
+          <label className="form-label form-label--required" htmlFor="phone">Phone Number (Indian Mobile)</label>
           <input
-            id="phoneNumber"
-            name="phoneNumber"
+            id="phone"
+            name="phone"
             type="tel"
-            className={`form-input ${errors.phoneNumber ? 'form-input--error' : ''}`}
+            className={`form-input ${errors.phone ? 'form-input--error' : ''}`}
             placeholder="e.g. 9876500001"
-            value={formData.phoneNumber}
+            value={formData.phone}
             onChange={handleChange}
             disabled={isSubmitting}
           />
-          {errors.phoneNumber && <span className="form-error">{errors.phoneNumber}</span>}
+          {errors.phone && <span className="form-error">{errors.phone}</span>}
         </div>
       </div>
 
@@ -314,20 +281,19 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
 
       <div className="form-row">
         <div className="form-group">
-          <label className="form-label form-label--required" htmlFor="employmentStatus">Employment Status</label>
+          <label className="form-label" htmlFor="status">Work Status</label>
           <select
-            id="employmentStatus"
-            name="employmentStatus"
-            className={`form-select ${errors.employmentStatus ? 'form-select--error' : ''}`}
-            value={formData.employmentStatus}
+            id="status"
+            name="status"
+            className="form-select"
+            value={formData.status}
             onChange={handleChange}
             disabled={isSubmitting}
           >
-            <option value="Active">Active</option>
+            <option value="Available">Available</option>
+            <option value="Busy">Busy</option>
             <option value="On Leave">On Leave</option>
-            <option value="Inactive">Inactive</option>
           </select>
-          {errors.employmentStatus && <span className="form-error">{errors.employmentStatus}</span>}
         </div>
 
         <div className="form-group">
@@ -415,7 +381,7 @@ function TechnicianForm({ mode = 'create', initialValues = null, onSubmit, onCan
 
       {/* Section D: Optional Information */}
       <h4 style={{ margin: '0 0 12px 0', fontSize: '0.88rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-primary)' }}>
-        D. Optional Information
+        {mode === 'create' ? 'C' : 'C'}. Optional Information
       </h4>
 
       <div className="form-group">

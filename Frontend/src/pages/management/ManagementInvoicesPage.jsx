@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Receipt, Search, FileText, Send, Eye, Edit3, Bell } from 'lucide-react'
-import { getAllInvoices, createInvoice } from '../../services/invoiceService.js'
+import { Receipt, Search, FileText, Send, Eye, Edit3, Bell, Download } from 'lucide-react'
+import { getAllInvoices, createInvoice, downloadInvoicePdf } from '../../services/invoiceService.js'
 import { getAllServiceRequests } from '../../services/serviceRequestService.js'
 import { getWorkReportByRequestId } from '../../services/workReportService.js'
 import { formatCurrency, formatDate } from '../../utils/format.js'
@@ -254,6 +254,13 @@ function ManagementInvoicesPage() {
                             >
                               <Eye size={12} style={{ marginRight: 4 }} /> View
                             </button>
+                            <button
+                              className="btn btn--outline btn--sm"
+                              onClick={() => downloadInvoicePdf(inv.id, inv.invoiceNumber)}
+                              title="Download Invoice PDF"
+                            >
+                              <Download size={12} style={{ marginRight: 4 }} /> PDF
+                            </button>
                             {isDraft && (
                               <button 
                                 className="btn btn--success btn--sm"
@@ -285,5 +292,6 @@ function ManagementInvoicesPage() {
     </PageContainer>
   )
 }
+
 
 export default ManagementInvoicesPage

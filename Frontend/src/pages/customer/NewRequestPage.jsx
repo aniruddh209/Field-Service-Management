@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronRight, ChevronLeft, Wrench, MapPin, Package, Calendar, FileText, Send } from 'lucide-react'
+import { ArrowLeft, Check, Wrench, MapPin, Package, Calendar, FileText, Send, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getServices } from '../../services/serviceCatalogService.js'
 import { getMyAddresses } from '../../services/addressService.js'
@@ -10,339 +10,399 @@ import { formatCurrency } from '../../utils/format.js'
 import PageContainer from '../../components/layout/PageContainer.jsx'
 import './NewRequestPage.css'
 
-const STEPS = [
-  { label: 'Service', icon: Wrench },
-  { label: 'Address', icon: MapPin },
-  { label: 'Asset', icon: Package },
-  { label: 'Schedule', icon: Calendar },
-  { label: 'Problem', icon: FileText },
-  { label: 'Review', icon: Check },
-  { label: 'Submit', icon: Send }
-]
-
 function NewRequestPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [step, setStep] = useState(0)
+
   const [services, setServices] = useState([])
   const [addresses, setAddresses] = useState([])
   const [assets, setAssets] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+
   const [form, setForm] = useState({
-    serviceId: null, serviceName: '', servicePrice: 0,
-    addressId: null, addressShortText: '',
-    assetId: null, assetName: '',
-    preferredDate: '', preferredTime: '',
-    problemTitle: '', problemDescription: ''
+    serviceId: '',
+    addressId: '',
+    assetId: '',
+    preferredDate: '',
+    preferredTime: '',
+    problemTitle: '',
+    problemDescription: ''
   })
+
+  const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [newRequest, setNewRequest] = useState(null)
-  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     async function load() {
-      const [svcData, addrData, assetData] = await Promise.all([
-        getServices(), getMyAddresses(user.id), getMyAssets(user.id)
-      ])
-      setServices(svcData)
-      setAddresses(addrData)
-      setAssets(assetData)
+      try {
+        const [svcData, addrData, assetData] = await Promise.all([
+          getServices(),
+          getMyAddresses(user?.id),
+          getMyAssets(user?.id)
+        ])
+        setServices(svcData || [])
+        setAddresses(addrData || [])
+        setAssets(assetData || [])
+
+        // Auto-select first address if available
+        if (addrData && addrData.length > 0) {
+          setForm(f => ({ ...f, addressId: addrData[0].id }))
+        }
+      } catch (err) {
+        console.error('Failed to load form options:', err)
+      }
     }
     if (user?.id) load()
   }, [user?.id])
 
-  function canProceed() {
-    switch (step) {
-      case 0: return !!form.serviceId
-      case 1: return !!form.addressId
-      case 2: return true // asset is optional
-      case 3: return !!form.preferredDate && !!form.preferredTime
-      case 4: return !!form.problemTitle.trim() && !!form.problemDescription.trim()
-      case 5: return true // review step
-      default: return false
+  const selectedService = services.find(s => s.id === form.serviceId)
+  const selectedAddress = addresses.find(a => a.id === form.addressId)
+  const selectedAsset = assets.find(a => a.id === form.assetId)
+
+  function validate() {
+    const e = {}
+    if (!form.serviceId) e.serviceId = 'Please select a service'
+    if (!form.addressId) e.addressId = 'Please select a service address'
+    if (!form.preferredDate) e.preferredDate = 'Please select a preferred date'
+    if (!form.preferredTime) e.preferredTime = 'Please select a preferred time slot'
+    if (!form.problemTitle.trim()) e.problemTitle = 'Problem title is required'
+    if (!form.problemDescription.trim()) e.problemDescription = 'Please enter problem description'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!validate()) return
+
+    try {
+      setSubmitting(true)
+      const data = {
+        customerId: user.id,
+        customerName: `${user.firstName} ${user.lastName}`,
+        serviceId: form.serviceId,
+        serviceName: selectedService ? selectedService.name : '',
+        addressId: form.addressId,
+        addressShortText: selectedAddress ? `${selectedAddress.addressLine1}, ${selectedAddress.city}` : '',
+        assetId: form.assetId || null,
+        assetName: selectedAsset ? selectedAsset.name : '',
+        preferredDate: form.preferredDate,
+        preferredTime: form.preferredTime,
+        problemTitle: form.problemTitle.trim(),
+        problemDescription: form.problemDescription.trim()
+      }
+      const result = await createServiceRequest(data)
+      setNewRequest(result)
+      setSubmitted(true)
+    } catch (err) {
+      console.error('Failed to submit request:', err)
+      setErrors({ submit: 'Failed to submit service request. Please try again.' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  function handleNext() {
-    if (!canProceed()) {
-      // Set appropriate errors
-      const e = {}
-      if (step === 0 && !form.serviceId) e.service = 'Please select a service'
-      if (step === 1 && !form.addressId) e.address = 'Please select an address'
-      if (step === 3 && !form.preferredDate) e.date = 'Date is required'
-      if (step === 3 && !form.preferredTime) e.time = 'Time is required'
-      if (step === 4 && !form.problemTitle.trim()) e.problemTitle = 'Problem title is required'
-      if (step === 4 && !form.problemDescription.trim()) e.problemDescription = 'Please describe the problem'
-      setErrors(e)
-      return
-    }
-    setErrors({})
-    if (step === 5) {
-      handleSubmit()
-    } else {
-      setStep(s => s + 1)
-    }
-  }
-
-  function handleBack() {
-    if (step > 0) setStep(s => s - 1)
-  }
-
-  async function handleSubmit() {
-    const data = {
-      customerId: user.id,
-      customerName: `${user.firstName} ${user.lastName}`,
-      serviceId: form.serviceId,
-      serviceName: form.serviceName,
-      addressId: form.addressId,
-      addressShortText: form.addressShortText,
-      assetId: form.assetId,
-      assetName: form.assetName,
-      preferredDate: form.preferredDate,
-      preferredTime: form.preferredTime,
-      problemTitle: form.problemTitle,
-      problemDescription: form.problemDescription
-    }
-    const result = await createServiceRequest(data)
-    setNewRequest(result)
-    setSubmitted(true)
-    setStep(6)
-  }
-
-  function selectService(svc) {
-    setForm(f => ({ ...f, serviceId: svc.id, serviceName: svc.name, servicePrice: svc.price || svc.startingPrice || 0 }))
-    setErrors({})
-  }
-
-  function selectAddress(addr) {
-    setForm(f => ({ ...f, addressId: addr.id, addressShortText: `${addr.addressLine1}, ${addr.city}` }))
-    setErrors({})
-  }
-
-  function selectAsset(asset) {
-    setForm(f => ({ ...f, assetId: asset.id, assetName: asset.name }))
+  if (submitted) {
+    return (
+      <PageContainer>
+        <div style={{ textAlign: 'center', padding: '48px 16px', maxWidth: 600, margin: '0 auto' }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'var(--color-success-light)', color: 'var(--color-success)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+          }}>
+            <Check size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>Request Submitted Successfully!</h2>
+          <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Your request <strong>{newRequest?.requestNumber}</strong> has been created.
+          </p>
+          <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.85rem', marginBottom: 24 }}>
+            Our operations team will review your request shortly and assign an expert technician.
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button className="btn btn--outline" onClick={() => navigate('/customer/requests')}>View My Requests</button>
+            <button className="btn btn--primary" onClick={() => navigate('/customer/dashboard')}>Go to Dashboard</button>
+          </div>
+        </div>
+      </PageContainer>
+    )
   }
 
   return (
     <PageContainer>
-      <button className="btn btn--ghost btn--sm" onClick={() => navigate('/customer/requests')} style={{ marginBottom: 8 }}>
+      <button className="btn btn--ghost btn--sm" onClick={() => navigate('/customer/requests')} style={{ marginBottom: 12 }}>
         <ArrowLeft size={16} /> Back to My Requests
       </button>
 
-      <h1 className="page-header__title">New Service Request</h1>
-
-      {/* Step Indicator */}
-      <div className="wizard-steps">
-        {STEPS.map((s, idx) => {
-          const Icon = s.icon
-          const isComplete = idx < step
-          const isActive = idx === step
-          return (
-            <div key={s.label} className={`wizard-step ${isComplete ? 'wizard-step--complete' : ''} ${isActive ? 'wizard-step--active' : ''}`}>
-              <div className="wizard-step__dot">
-                {isComplete ? <Check size={12} /> : <Icon size={12} />}
-              </div>
-              <span className="wizard-step__label">{s.label}</span>
-            </div>
-          )
-        })}
+      <div className="page-header" style={{ marginBottom: 20 }}>
+        <h1 className="page-header__title">Create New Service Request</h1>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: 4 }}>
+          Fill out the form below to quickly request service in one step.
+        </p>
       </div>
 
-      {/* Step Content */}
-      <div className="wizard-content">
-        {/* Step 0: Select Service */}
-        {step === 0 && (
-          <div>
-            <h2 className="wizard-content__title">Select a Service</h2>
-            <p className="wizard-content__subtitle">Choose the type of service you need</p>
-            {errors.service && <p className="form-error" style={{ marginBottom: 12 }}>{errors.service}</p>}
-            <div className="cards-grid">
-              {services.map(svc => (
-                <div key={svc.id} className={`data-card ${form.serviceId === svc.id ? 'data-card--selected' : ''}`} onClick={() => selectService(svc)} style={{ cursor: 'pointer' }}>
-                  <div className="data-card__header">
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{svc.name}</h3>
-                    {form.serviceId === svc.id && <Check size={18} style={{ color: 'var(--color-primary)' }} />}
+      {errors.submit && (
+        <div style={{ padding: 12, background: 'var(--color-danger-light)', border: '1px solid var(--color-danger)', borderRadius: 8, color: 'var(--color-danger)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertCircle size={18} />
+          <span>{errors.submit}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="single-request-form-layout">
+        {/* Main Form Fields Column */}
+        <div className="single-request-main">
+
+          {/* Card 1: Service & Equipment Details */}
+          <div className="form-card">
+            <div className="form-card__header">
+              <Wrench size={18} className="form-card__icon" />
+              <h3>Service & Address Selection</h3>
+            </div>
+            <div className="form-card__body">
+
+              {/* Service Select */}
+              <div className="form-group">
+                <label className="form-label form-label--required">Select Service</label>
+                <select
+                  className={`form-select ${errors.serviceId ? 'form-select--error' : ''}`}
+                  value={form.serviceId}
+                  onChange={e => {
+                    setForm(f => ({ ...f, serviceId: e.target.value }))
+                    if (errors.serviceId) setErrors(err => ({ ...err, serviceId: null }))
+                  }}
+                >
+                  <option value="">-- Select Service --</option>
+                  {services.map(svc => (
+                    <option key={svc.id} value={svc.id}>
+                      {svc.name} ({svc.startingPrice ? `Starting at ${formatCurrency(svc.startingPrice)}` : formatCurrency(svc.price || 0)})
+                    </option>
+                  ))}
+                </select>
+                {errors.serviceId && <span className="form-error">{errors.serviceId}</span>}
+                {selectedService && (
+                  <div style={{ marginTop: 6, fontSize: '0.82rem', color: 'var(--color-text-secondary)', background: 'var(--color-surface-hover)', padding: '8px 12px', borderRadius: 6 }}>
+                    {selectedService.description}
                   </div>
-                  <div className="data-card__body">
-                    <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', marginBottom: 8 }}>{svc.description}</p>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                      {svc.startingPrice ? `Starting at ${formatCurrency(svc.startingPrice)}` : formatCurrency(svc.price)}
-                    </span>
-                  </div>
+                )}
+              </div>
+
+              {/* Service Address Select */}
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="form-label form-label--required" style={{ margin: 0 }}>Service Address</label>
+                  <button type="button" className="btn-link" onClick={() => navigate('/customer/addresses')} style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', padding: 0 }}>
+                    + Manage Addresses
+                  </button>
                 </div>
-              ))}
+                {addresses.length === 0 ? (
+                  <div style={{ padding: 12, background: 'var(--color-warning-light)', borderRadius: 6, fontSize: '0.85rem' }}>
+                    No saved addresses found.{' '}
+                    <button type="button" className="btn-link" onClick={() => navigate('/customer/addresses')} style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: 600 }}>Click here to add an address</button>.
+                  </div>
+                ) : (
+                  <select
+                    className={`form-select ${errors.addressId ? 'form-select--error' : ''}`}
+                    value={form.addressId}
+                    onChange={e => {
+                      setForm(f => ({ ...f, addressId: e.target.value }))
+                      if (errors.addressId) setErrors(err => ({ ...err, addressId: null }))
+                    }}
+                  >
+                    <option value="">-- Select Address --</option>
+                    {addresses.map(addr => (
+                      <option key={addr.id} value={addr.id}>
+                        {addr.label}: {addr.addressLine1}, {addr.city}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {errors.addressId && <span className="form-error">{errors.addressId}</span>}
+              </div>
+
+              {/* Equipment / Asset Select (Optional) */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Related Equipment / Asset (Optional)</label>
+                <select
+                  className="form-select"
+                  value={form.assetId}
+                  onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))}
+                >
+                  <option value="">None / Not Applicable</option>
+                  {assets.map(asset => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.name} ({asset.brand} {asset.model ? `· ${asset.model}` : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
             </div>
           </div>
-        )}
 
-        {/* Step 1: Select Address */}
-        {step === 1 && (
-          <div>
-            <h2 className="wizard-content__title">Choose Service Address</h2>
-            <p className="wizard-content__subtitle">Where should the technician visit?</p>
-            {errors.address && <p className="form-error" style={{ marginBottom: 12 }}>{errors.address}</p>}
-            {addresses.length === 0 ? (
-              <div className="page-state page-state--empty">
-                <MapPin size={36} className="page-state__icon" />
-                <p className="page-state__title">No addresses saved</p>
-                <button className="btn btn--primary" onClick={() => navigate('/customer/addresses')}>Add Address First</button>
-              </div>
-            ) : (
-              <div className="cards-grid">
-                {addresses.map(addr => (
-                  <div key={addr.id} className={`data-card ${form.addressId === addr.id ? 'data-card--selected' : ''}`} onClick={() => selectAddress(addr)} style={{ cursor: 'pointer' }}>
-                    <div className="data-card__header">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <MapPin size={16} style={{ color: 'var(--color-primary)' }} />
-                        <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{addr.label}</h3>
-                      </div>
-                      {form.addressId === addr.id && <Check size={18} style={{ color: 'var(--color-primary)' }} />}
-                    </div>
-                    <div className="data-card__body">
-                      <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>{addr.addressLine1}, {addr.city}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 2: Select Asset (Optional) */}
-        {step === 2 && (
-          <div>
-            <h2 className="wizard-content__title">Select Equipment (Optional)</h2>
-            <p className="wizard-content__subtitle">If the service is for a specific equipment, select it below</p>
-            <div className="cards-grid">
-              <div className={`data-card ${form.assetId === null ? 'data-card--selected' : ''}`} onClick={() => setForm(f => ({ ...f, assetId: null, assetName: '' }))} style={{ cursor: 'pointer' }}>
-                <div className="data-card__body" style={{ padding: 16, textAlign: 'center' }}>
-                  <p style={{ fontWeight: 600 }}>None / Not Applicable</p>
-                </div>
-              </div>
-              {assets.map(asset => (
-                <div key={asset.id} className={`data-card ${form.assetId === asset.id ? 'data-card--selected' : ''}`} onClick={() => selectAsset(asset)} style={{ cursor: 'pointer' }}>
-                  <div className="data-card__header">
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{asset.name}</h3>
-                    {form.assetId === asset.id && <Check size={18} style={{ color: 'var(--color-primary)' }} />}
-                  </div>
-                  <div className="data-card__body">
-                    <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>{asset.brand} {asset.model && `· ${asset.model}`}</p>
-                  </div>
-                </div>
-              ))}
+          {/* Card 2: Schedule */}
+          <div className="form-card">
+            <div className="form-card__header">
+              <Calendar size={18} className="form-card__icon" />
+              <h3>Preferred Schedule</h3>
             </div>
-          </div>
-        )}
-
-        {/* Step 3: Schedule */}
-        {step === 3 && (
-          <div>
-            <h2 className="wizard-content__title">Preferred Schedule</h2>
-            <p className="wizard-content__subtitle">When would you like the technician to visit?</p>
-            <div style={{ maxWidth: 400 }}>
+            <div className="form-card__body grid-2-col">
               <div className="form-group">
                 <label className="form-label form-label--required">Preferred Date</label>
-                <input type="date" className={`form-input ${errors.date ? 'form-input--error' : ''}`} value={form.preferredDate} onChange={e => { setForm(f => ({ ...f, preferredDate: e.target.value })); setErrors({}) }} min={new Date().toISOString().split('T')[0]} />
-                {errors.date && <span className="form-error">{errors.date}</span>}
+                <input
+                  type="date"
+                  className={`form-input ${errors.preferredDate ? 'form-input--error' : ''}`}
+                  value={form.preferredDate}
+                  onChange={e => {
+                    setForm(f => ({ ...f, preferredDate: e.target.value }))
+                    if (errors.preferredDate) setErrors(err => ({ ...err, preferredDate: null }))
+                  }}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                {errors.preferredDate && <span className="form-error">{errors.preferredDate}</span>}
               </div>
+
               <div className="form-group">
-                <label className="form-label form-label--required">Preferred Time</label>
-                <select className={`form-select ${errors.time ? 'form-select--error' : ''}`} value={form.preferredTime} onChange={e => { setForm(f => ({ ...f, preferredTime: e.target.value })); setErrors({}) }}>
-                  <option value="">Select time slot</option>
-                  <option value="09:00">9:00 AM</option>
-                  <option value="10:00">10:00 AM</option>
-                  <option value="10:30">10:30 AM</option>
-                  <option value="11:00">11:00 AM</option>
-                  <option value="12:00">12:00 PM</option>
-                  <option value="13:00">1:00 PM</option>
-                  <option value="14:00">2:00 PM</option>
-                  <option value="15:00">3:00 PM</option>
-                  <option value="15:30">3:30 PM</option>
-                  <option value="16:00">4:00 PM</option>
-                  <option value="17:00">5:00 PM</option>
+                <label className="form-label form-label--required">Preferred Time Slot</label>
+                <select
+                  className={`form-select ${errors.preferredTime ? 'form-select--error' : ''}`}
+                  value={form.preferredTime}
+                  onChange={e => {
+                    setForm(f => ({ ...f, preferredTime: e.target.value }))
+                    if (errors.preferredTime) setErrors(err => ({ ...err, preferredTime: null }))
+                  }}
+                >
+                  <option value="">-- Select Time Slot --</option>
+                  <option value="09:00">9:00 AM - 10:00 AM</option>
+                  <option value="10:00">10:00 AM - 11:00 AM</option>
+                  <option value="10:30">10:30 AM - 11:30 AM</option>
+                  <option value="11:00">11:00 AM - 12:00 PM</option>
+                  <option value="12:00">12:00 PM - 1:00 PM</option>
+                  <option value="13:00">1:00 PM - 2:00 PM</option>
+                  <option value="14:00">2:00 PM - 3:00 PM</option>
+                  <option value="15:00">3:00 PM - 4:00 PM</option>
+                  <option value="15:30">3:30 PM - 4:30 PM</option>
+                  <option value="16:00">4:00 PM - 5:00 PM</option>
+                  <option value="17:00">5:00 PM - 6:00 PM</option>
                 </select>
-                {errors.time && <span className="form-error">{errors.time}</span>}
+                {errors.preferredTime && <span className="form-error">{errors.preferredTime}</span>}
               </div>
             </div>
           </div>
-        )}
 
-        {/* Step 4: Problem Description */}
-        {step === 4 && (
-          <div>
-            <h2 className="wizard-content__title">Describe the Problem</h2>
-            <p className="wizard-content__subtitle">Help us understand what you need</p>
-            <div style={{ maxWidth: 520 }}>
+          {/* Card 3: Problem Description */}
+          <div className="form-card">
+            <div className="form-card__header">
+              <FileText size={18} className="form-card__icon" />
+              <h3>Problem Details</h3>
+            </div>
+            <div className="form-card__body">
               <div className="form-group">
                 <label className="form-label form-label--required">Problem Title</label>
-                <input className={`form-input ${errors.problemTitle ? 'form-input--error' : ''}`} value={form.problemTitle} onChange={e => setForm(f => ({ ...f, problemTitle: e.target.value }))} placeholder="Brief summary, e.g. AC not cooling" />
+                <input
+                  type="text"
+                  className={`form-input ${errors.problemTitle ? 'form-input--error' : ''}`}
+                  value={form.problemTitle}
+                  onChange={e => {
+                    setForm(f => ({ ...f, problemTitle: e.target.value }))
+                    if (errors.problemTitle) setErrors(err => ({ ...err, problemTitle: null }))
+                  }}
+                  placeholder="e.g. Air Conditioner is not cooling / unusual noise"
+                />
                 {errors.problemTitle && <span className="form-error">{errors.problemTitle}</span>}
               </div>
-              <div className="form-group">
-                <label className="form-label form-label--required">Detailed Description</label>
-                <textarea className={`form-textarea ${errors.problemDescription ? 'form-textarea--error' : ''}`} value={form.problemDescription} onChange={e => setForm(f => ({ ...f, problemDescription: e.target.value }))} placeholder="Describe the issue in detail..." rows={5} />
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label form-label--required">Detailed Problem Description</label>
+                <textarea
+                  className={`form-textarea ${errors.problemDescription ? 'form-textarea--error' : ''}`}
+                  value={form.problemDescription}
+                  onChange={e => {
+                    setForm(f => ({ ...f, problemDescription: e.target.value }))
+                    if (errors.problemDescription) setErrors(err => ({ ...err, problemDescription: null }))
+                  }}
+                  placeholder="Please describe the symptoms, error codes, or specific issues you are facing..."
+                  rows={4}
+                />
                 {errors.problemDescription && <span className="form-error">{errors.problemDescription}</span>}
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Step 5: Review */}
-        {step === 5 && (
-          <div>
-            <h2 className="wizard-content__title">Review & Submit</h2>
-            <p className="wizard-content__subtitle">Please verify your details before submitting</p>
-            <div className="detail-section" style={{ marginTop: 16 }}>
-              <div className="detail-section__body">
-                <div className="detail-grid">
-                  <div><p className="detail-item__label">Service</p><p className="detail-item__value">{form.serviceName}</p></div>
-                  <div><p className="detail-item__label">Address</p><p className="detail-item__value">{form.addressShortText}</p></div>
-                  <div><p className="detail-item__label">Equipment</p><p className="detail-item__value">{form.assetName || 'Not specified'}</p></div>
-                  <div><p className="detail-item__label">Preferred Date</p><p className="detail-item__value">{form.preferredDate}</p></div>
-                  <div><p className="detail-item__label">Preferred Time</p><p className="detail-item__value">{form.preferredTime}</p></div>
-                  <div><p className="detail-item__label">Estimated Price</p><p className="detail-item__value" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>{form.servicePrice ? formatCurrency(form.servicePrice) : 'Quote upon inspection'}</p></div>
-                </div>
-                <div style={{ marginTop: 16 }}>
-                  <p className="detail-item__label">Problem</p>
-                  <p className="detail-item__value" style={{ fontWeight: 600 }}>{form.problemTitle}</p>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>{form.problemDescription}</p>
-                </div>
+        {/* Sidebar Summary & Action Panel */}
+        <div className="single-request-sidebar">
+          <div className="summary-card">
+            <h3 className="summary-card__title">Request Summary</h3>
+
+            <div className="summary-list">
+              <div className="summary-item">
+                <span className="summary-item__label">Service</span>
+                <span className="summary-item__value">
+                  {selectedService ? selectedService.name : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                </span>
+              </div>
+
+              <div className="summary-item">
+                <span className="summary-item__label">Est. Starting Price</span>
+                <span className="summary-item__value highlight">
+                  {selectedService
+                    ? (selectedService.startingPrice ? formatCurrency(selectedService.startingPrice) : formatCurrency(selectedService.price || 0))
+                    : '—'}
+                </span>
+              </div>
+
+              <div className="summary-item">
+                <span className="summary-item__label">Address</span>
+                <span className="summary-item__value">
+                  {selectedAddress ? `${selectedAddress.label} (${selectedAddress.city})` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                </span>
+              </div>
+
+              <div className="summary-item">
+                <span className="summary-item__label">Equipment</span>
+                <span className="summary-item__value">
+                  {selectedAsset ? selectedAsset.name : 'None'}
+                </span>
+              </div>
+
+              <div className="summary-item">
+                <span className="summary-item__label">Preferred Date</span>
+                <span className="summary-item__value">
+                  {form.preferredDate || <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                </span>
+              </div>
+
+              <div className="summary-item">
+                <span className="summary-item__label">Preferred Time</span>
+                <span className="summary-item__value">
+                  {form.preferredTime ? `${form.preferredTime}` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                </span>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Step 6: Success */}
-        {step === 6 && submitted && (
-          <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--color-success-light)', color: 'var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <Check size={32} />
-            </div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 8 }}>Request Submitted!</h2>
-            <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-              Your request <strong>{newRequest?.requestNumber}</strong> has been created successfully.
-            </p>
-            <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.85rem', marginBottom: 24 }}>
-              Our team will review it shortly and assign a technician.
-            </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button className="btn btn--outline" onClick={() => navigate('/customer/requests')}>View My Requests</button>
-              <button className="btn btn--primary" onClick={() => navigate('/customer/dashboard')}>Go to Dashboard</button>
+            <div className="summary-card__actions">
+              <button
+                type="submit"
+                className="btn btn--primary btn--full"
+                disabled={submitting}
+              >
+                <Send size={16} /> {submitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn--outline btn--full"
+                onClick={() => navigate('/customer/requests')}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Navigation Buttons */}
-      {step < 6 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-          <button className="btn btn--outline" onClick={step === 0 ? () => navigate('/customer/requests') : handleBack} disabled={false}>
-            <ChevronLeft size={16} /> {step === 0 ? 'Cancel' : 'Back'}
-          </button>
-          <button className="btn btn--primary" onClick={handleNext} disabled={!canProceed()}>
-            {step === 5 ? 'Submit Request' : 'Next'} <ChevronRight size={16} />
-          </button>
         </div>
-      )}
+      </form>
     </PageContainer>
   )
 }

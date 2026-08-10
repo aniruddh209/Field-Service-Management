@@ -1,119 +1,140 @@
-/* ===========================
-   New Request Wizard Styles
-   =========================== */
+/* ==========================================
+   Single-Page Service Request Form Styles
+   ========================================== */
 
-.wizard-steps {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin-bottom: var(--spacing-lg);
-  overflow-x: auto;
-  padding-bottom: var(--spacing-sm);
+.single-request-form-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
 }
 
-.wizard-step {
+.single-request-main {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 60px;
-  position: relative;
+  gap: 20px;
 }
 
-.wizard-step:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--color-border);
-  z-index: 0;
+/* Form Cards */
+.form-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
-.wizard-step--complete:not(:last-child)::after {
-  background: var(--color-primary);
-}
-
-.wizard-step__dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+.form-card__header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: var(--color-surface-hover);
-  color: var(--color-text-tertiary);
-  border: 2px solid var(--color-border);
-  z-index: 1;
-  transition: all var(--transition-fast);
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.wizard-step--active .wizard-step__dot {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-}
-
-.wizard-step--complete .wizard-step__dot {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-}
-
-.wizard-step__label {
-  font-size: 0.7rem;
+.form-card__header h3 {
+  font-size: 1.05rem;
   font-weight: 600;
-  color: var(--color-text-tertiary);
-  white-space: nowrap;
+  color: var(--color-text);
+  margin: 0;
 }
 
-.wizard-step--active .wizard-step__label {
+.form-card__icon {
   color: var(--color-primary);
 }
 
-.wizard-step--complete .wizard-step__label {
-  color: var(--color-text-secondary);
+.form-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* Wizard Content */
-.wizard-content {
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Sidebar & Summary Card */
+.single-request-sidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.summary-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  min-height: 300px;
+  border-radius: var(--radius-lg, 12px);
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-.wizard-content__title {
+.summary-card__title {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text);
-  margin-bottom: 4px;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.wizard-content__subtitle {
-  font-size: 0.85rem;
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.88rem;
+}
+
+.summary-item__label {
   color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-lg);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-/* Selected card */
-.data-card--selected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-alpha);
-  box-shadow: 0 0 0 2px var(--color-primary-light);
+.summary-item__value {
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
 }
 
-@media (max-width: 768px) {
-  .wizard-steps {
-    gap: 0;
+.summary-item__value.highlight {
+  color: var(--color-primary);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.summary-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn--full {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .single-request-form-layout {
+    grid-template-columns: 1fr;
   }
-  .wizard-step__label {
-    display: none;
+
+  .single-request-sidebar {
+    position: static;
   }
-  .wizard-content {
-    padding: var(--spacing-md);
+
+  .grid-2-col {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Edit2, ToggleLeft, ToggleRight, Check } from 'lucide-react'
+import { Plus, Search, Edit2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { getServices, createService, updateService, toggleServiceActive } from '../../services/serviceCatalogService.js'
 import { formatCurrency } from '../../utils/format.js'
 import Modal from '../../components/ui/Modal.jsx'
 import { LoadingState, EmptyState } from '../../components/ui/PageStates.jsx'
 import PageContainer from '../../components/layout/PageContainer.jsx'
 
-const EMPTY_FORM = { name: '', description: '', price: '', category: 'Cooling', estimatedDurationHours: 1 }
+const EMPTY_FORM = {
+  serviceName: '',
+  category: '',
+  description: '',
+  basePrice: '',
+  estimatedHours: 1,
+  image: '',
+  isActive: true
+}
 
 function ManagementServicesPage() {
   const [services, setServices] = useState([])
@@ -17,20 +25,32 @@ function ManagementServicesPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
 
-  async function load() {
-    setIsLoading(true)
-    const data = await getServices(true) // Get all services including inactive
-    setServices(data)
-    setIsLoading(false)
+async function load() {
+  try {
+    setIsLoading(true);
+
+    const data = await getServices();
+
+    console.log("Services from API:", data);
+
+    setServices(data);
+
+    console.log("State will become:", data);
+
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setIsLoading(false);
   }
+}
 
   useEffect(() => {
     load()
   }, [])
 
   const filtered = services.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.category.toLowerCase().includes(search.toLowerCase())
+    (s.serviceName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (s.category || "").toLowerCase().includes(search.toLowerCase())
   )
 
   function openAdd() {
@@ -42,28 +62,46 @@ function ManagementServicesPage() {
 
   function openEdit(svc) {
     setEditingId(svc.id)
+
     setForm({
-      name: svc.name,
-      description: svc.description,
-      price: svc.price || svc.startingPrice || '',
+      serviceName: svc.serviceName,
       category: svc.category,
-      estimatedDurationHours: svc.estimatedDurationHours || 1
+      description: svc.description,
+      basePrice: svc.basePrice,
+      estimatedHours: svc.estimatedHours,
+      image: svc.image || '',
+      isActive: svc.isActive
     })
+
     setErrors({})
     setShowModal(true)
   }
 
   async function handleToggle(id) {
     await toggleServiceActive(id)
-    load()
+    await load()
   }
 
   function validate() {
     const e = {}
-    if (!form.name.trim()) e.name = 'Name is required'
-    if (!form.description.trim()) e.description = 'Description is required'
-    if (!form.price || isNaN(form.price) || Number(form.price) <= 0) e.price = 'Valid price is required'
+
+    if (!form.serviceName.trim())
+      e.serviceName = "Service Name is required"
+
+    if (!form.category.trim())
+      e.category = "Category is required"
+
+    if (!form.description.trim())
+      e.description = "Description is required"
+
+    if (!form.basePrice || Number(form.basePrice) <= 0)
+      e.basePrice = "Enter valid price"
+
+    if (!form.estimatedHours || Number(form.estimatedHours) <= 0)
+      e.estimatedHours = "Enter valid hours"
+
     setErrors(e)
+
     return Object.keys(e).length === 0
   }
 
@@ -72,16 +110,21 @@ function ManagementServicesPage() {
     if (!validate()) return
     const data = {
       ...form,
-      price: Number(form.price)
+      basePrice: Number(form.basePrice),
+      estimatedHours: Number(form.estimatedHours)
     }
 
     if (editingId) {
-      await updateService(editingId, data)
+      await updateService(editingId, {
+        id: editingId,
+        ...data
+      })
     } else {
       await createService(data)
     }
     setShowModal(false)
-    load()
+    setForm(EMPTY_FORM)
+    await load()
   }
 
   if (isLoading) return <PageContainer><LoadingState message="Loading services..." /></PageContainer>
@@ -130,11 +173,11 @@ function ManagementServicesPage() {
             <tbody>
               {filtered.map(svc => (
                 <tr key={svc.id}>
-                  <td style={{ fontWeight: 600 }}>{svc.name}</td>
+                  <td style={{ fontWeight: 600 }}>{svc.serviceName}</td>
                   <td>{svc.category}</td>
-                  <td>{svc.estimatedDurationHours} hr{svc.estimatedDurationHours !== 1 ? 's' : ''}</td>
+                  <td>{svc.estimatedHours} hr{svc.estimatedHours !== 1 ? 's' : ''}</td>
                   <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-                    {formatCurrency(svc.price || svc.startingPrice)}
+                    {formatCurrency(svc.basePrice)}
                   </td>
                   <td>
                     <span className={`badge ${svc.isActive ? 'badge--completed' : 'badge--cancelled'}`}>
@@ -169,12 +212,22 @@ function ManagementServicesPage() {
           <div className="form-group">
             <label className="form-label form-label--required">Service Name</label>
             <input
-              className={`form-input ${errors.name ? 'form-input--error' : ''}`}
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Deep Cleaning Service"
+              className={`form-input ${errors.serviceName ? 'form-input--error' : ''}`}
+              value={form.serviceName}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  serviceName: e.target.value
+                })
+              }
+              placeholder="e.g. AC Repair"
             />
-            {errors.name && <span className="form-error">{errors.name}</span>}
+
+            {errors.serviceName && (
+              <span className="form-error">
+                {errors.serviceName}
+              </span>
+            )}
           </div>
 
           <div className="form-row">
@@ -196,12 +249,22 @@ function ManagementServicesPage() {
               <label className="form-label form-label--required">Price (₹)</label>
               <input
                 type="number"
-                className={`form-input ${errors.price ? 'form-input--error' : ''}`}
-                value={form.price}
-                onChange={e => setForm({ ...form, price: e.target.value })}
+                className={`form-input ${errors.basePrice ? 'form-input--error' : ''}`}
+                value={form.basePrice}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    basePrice: e.target.value
+                  })
+                }
                 placeholder="499"
               />
-              {errors.price && <span className="form-error">{errors.price}</span>}
+
+              {errors.basePrice && (
+                <span className="form-error">
+                  {errors.basePrice}
+                </span>
+              )}
             </div>
           </div>
 
@@ -209,11 +272,21 @@ function ManagementServicesPage() {
             <label className="form-label">Estimated Duration (Hours)</label>
             <input
               type="number"
-              step="0.5"
               className="form-input"
-              value={form.estimatedDurationHours}
-              onChange={e => setForm({ ...form, estimatedDurationHours: Number(e.target.value) })}
+              value={form.estimatedHours}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  estimatedHours: Number(e.target.value)
+                })
+              }
             />
+
+            {errors.estimatedHours && (
+              <span className="form-error">
+                {errors.estimatedHours}
+              </span>
+            )}
           </div>
 
           <div className="form-group">

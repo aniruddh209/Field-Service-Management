@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Star, Phone, Mail, Calendar, Award, ShieldAlert } from 'lucide-react'
-import { getTechnicianById, updateTechnician } from '../../services/technicianService.js'
+import { getTechnicianById, updateTechnician, toggleTechnicianActive, changeWorkStatus } from '../../services/technicianService.js'
 import { getRequestsByTechnician } from '../../services/serviceRequestService.js'
 import { getTechnicianStatus, statusBadgeClasses } from '../../utils/technicianHelpers.js'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -40,7 +40,7 @@ function TechnicianDetailsPage() {
         return
       }
       setTechnician(techData)
-      setTempStatus(techData.employmentStatus || 'Active')
+      setTempStatus(techData.status || 'Available')
       
       const jobsData = await getRequestsByTechnician(techData.id)
       setJobs(jobsData)
@@ -58,13 +58,13 @@ function TechnicianDetailsPage() {
 
   const handleEditSubmit = async (formData) => {
     try {
-      const updated = await updateTechnician(technician.id, formData)
-      if (updated) {
-        setTechnician(updated)
-        // Adjust the local jobs count or reload data just in case
-        const jobsData = await getRequestsByTechnician(updated.id)
+      await updateTechnician(technician.id, formData)
+      // Reload technician data from API
+      const refreshed = await getTechnicianById(technician.id)
+      if (refreshed) {
+        setTechnician(refreshed)
+        const jobsData = await getRequestsByTechnician(refreshed.id)
         setJobs(jobsData)
-        
         setShowEditModal(false)
         showFeedback('Technician profile updated successfully')
       }
@@ -77,11 +77,12 @@ function TechnicianDetailsPage() {
   const handleStatusSubmit = async (e) => {
     e.preventDefault()
     try {
-      const updated = await updateTechnician(technician.id, { employmentStatus: tempStatus })
-      if (updated) {
-        setTechnician(updated)
+      await changeWorkStatus(technician.id, tempStatus)
+      const refreshed = await getTechnicianById(technician.id)
+      if (refreshed) {
+        setTechnician(refreshed)
         setShowStatusModal(false)
-        showFeedback('Employment status updated successfully')
+        showFeedback('Work status updated successfully')
       }
     } catch (err) {
       console.error(err)
@@ -90,9 +91,10 @@ function TechnicianDetailsPage() {
 
   const handleDeactivate = async () => {
     try {
-      const updated = await updateTechnician(technician.id, { isActive: false })
-      if (updated) {
-        setTechnician(updated)
+      await toggleTechnicianActive(technician.id)
+      const refreshed = await getTechnicianById(technician.id)
+      if (refreshed) {
+        setTechnician(refreshed)
         setShowDeactivateModal(false)
         showFeedback('Technician deactivated successfully')
       }
@@ -103,9 +105,10 @@ function TechnicianDetailsPage() {
 
   const handleActivate = async () => {
     try {
-      const updated = await updateTechnician(technician.id, { isActive: true })
-      if (updated) {
-        setTechnician(updated)
+      await toggleTechnicianActive(technician.id)
+      const refreshed = await getTechnicianById(technician.id)
+      if (refreshed) {
+        setTechnician(refreshed)
         showFeedback('Technician activated successfully')
       }
     } catch (err) {
@@ -184,11 +187,11 @@ function TechnicianDetailsPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, fontSize: '1.8rem', flexShrink: 0
           }}>
-            {technician.firstName[0]}{technician.lastName[0]}
+            {technician.fullName ? technician.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : '??'}
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>{technician.firstName} {technician.lastName}</h1>
+              <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>{technician.fullName}</h1>
               {!technician.isActive && <span className="badge badge--cancelled">Disabled Account</span>}
             </div>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginTop: 4 }}>
@@ -227,7 +230,7 @@ function TechnicianDetailsPage() {
                 <Phone size={16} style={{ color: 'var(--color-text-tertiary)' }} />
                 <div>
                   <p style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', margin: 0 }}>Phone Number</p>
-                  <p style={{ fontSize: '0.88rem', margin: 0, fontWeight: 500 }}>{technician.phoneNumber}</p>
+                  <p style={{ fontSize: '0.88rem', margin: 0, fontWeight: 500 }}>{technician.phone}</p>
                 </div>
               </div>
 
@@ -243,7 +246,7 @@ function TechnicianDetailsPage() {
                 <Award size={16} style={{ color: 'var(--color-text-tertiary)' }} />
                 <div>
                   <p style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', margin: 0 }}>Employment Status</p>
-                  <p style={{ fontSize: '0.88rem', margin: 0, fontWeight: 500 }}>{technician.employmentStatus || 'Active'}</p>
+                  <p style={{ fontSize: '0.88rem', margin: 0, fontWeight: 500 }}>{technician.status || 'Available'}</p>
                 </div>
               </div>
 
@@ -267,7 +270,7 @@ function TechnicianDetailsPage() {
           <div className="detail-section__body">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 20 }}>
               <div style={{ padding: 16, background: 'var(--color-surface-secondary)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-lg)', textAlign: 'center' }}>
-                <span style={{ fontSize: '1.8rem', fontWeight: 700, display: 'block', color: 'var(--color-primary)' }}>{technician.activeJobCount}</span>
+                <span style={{ fontSize: '1.8rem', fontWeight: 700, display: 'block', color: 'var(--color-primary)' }}>{technician.activeJobs}</span>
                 <span style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>Active Jobs (Workload)</span>
               </div>
               <div style={{ padding: 16, background: 'var(--color-surface-secondary)', border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-lg)', textAlign: 'center' }}>

@@ -1,82 +1,65 @@
-// ====================================
-// Technician Service
-// ====================================
-//
-// CRUD operations on technicians.
-//
-// Current: modifies local dummy copy in memory (resets on reload).
-// Future:
-//   GET  /api/technicians
-//   GET  /api/technicians/{id}
-//   GET  /api/technicians/available
-//   POST /api/technicians
-//   PUT  /api/technicians/{id}
-//
-// ====================================
+import api from "../api/api";
 
-import { techniciansData } from '../data/techniciansData.js';
-import { isTechnicianAssignable } from '../utils/technicianHelpers.js';
+// Get All Technicians
+export const getTechnicians = async () => {
+    const response = await api.get("/Technicians");
+    return response.data.data;
+};
 
-let technicians = [...techniciansData];
+// Get Technician By Id
+export const getTechnicianById = async (id) => {
+    const response = await api.get(`/Technicians/${id}`);
+    return response.data.data;
+};
 
-/**
- * Retrieves all technicians.
- * Future: GET /api/technicians
- */
-export async function getTechnicians() {
-  return Promise.resolve([...technicians]);
-}
+// Get Technician By UserId (client-side filter — backend has no /user/{id} endpoint)
+export const getTechnicianByUserId = async (userId) => {
+    const all = await getTechnicians();
+    return all.find(t => t.userId === Number(userId)) || null;
+};
 
-/**
- * Retrieves a single technician by ID.
- * Future: GET /api/technicians/{id}
- */
-export async function getTechnicianById(id) {
-  return Promise.resolve(technicians.find(t => t.id === Number(id)) || null);
-}
+// Create Technician
+export const createTechnician = async (technician) => {
+    const response = await api.post("/Technicians", technician);
+    return response.data.data;
+};
 
-/**
- * Retrieves a technician by their user account ID.
- * Used when a logged-in technician needs to find their technician profile.
- * Future: GET /api/technicians/me (backend resolves from JWT)
- */
-export async function getTechnicianByUserId(userId) {
-  return Promise.resolve(technicians.find(t => t.userId === Number(userId)) || null);
-}
+// Update Technician
+export const updateTechnician = async (id, technician) => {
+    const response = await api.put(`/Technicians/${id}`, technician);
+    return response.data;
+};
 
-/**
- * Filters technicians with Available status.
- * Future: GET /api/technicians/available
- */
-export async function getAvailableTechnicians() {
-  return Promise.resolve(
-    technicians.filter(isTechnicianAssignable)
-  );
-}
+// Delete Technician
+export const deleteTechnician = async (id) => {
+    const response = await api.delete(`/Technicians/${id}`);
+    return response.data;
+};
 
-/**
- * Creates a new technician.
- * Future: POST /api/technicians
- */
-export async function createTechnician(data) {
-  const newTech = {
-    ...data,
-    id: Math.max(...technicians.map(t => t.id), 0) + 1,
-    activeJobCount: 0,
-    rating: 0,
-    isActive: true
-  };
-  technicians.push(newTech);
-  return Promise.resolve(newTech);
-}
+// Toggle Technician Active/Inactive
+export const toggleTechnicianActive = async (id) => {
+    const response = await api.patch(`/Technicians/${id}/toggle`);
+    return response.data;
+};
 
-/**
- * Updates a technician.
- * Future: PUT /api/technicians/{id}
- */
-export async function updateTechnician(id, data) {
-  const idx = technicians.findIndex(t => t.id === Number(id));
-  if (idx === -1) return Promise.resolve(null);
-  technicians[idx] = { ...technicians[idx], ...data };
-  return Promise.resolve(technicians[idx]);
-}
+// Change Work Status (Available / Busy / On Leave)
+export const changeWorkStatus = async (id, status) => {
+    const response = await api.patch(
+        `/Technicians/${id}/work-status`,
+        JSON.stringify(status),
+        {
+            headers: {
+                "Content-Type": "application/json"
+            }
+        }
+    );
+    return response.data;
+};
+
+// Search Technicians by name
+export const searchTechnicians = async (name) => {
+    const response = await api.get(
+        `/Technicians/search?name=${encodeURIComponent(name)}`
+    );
+    return response.data.data;
+};

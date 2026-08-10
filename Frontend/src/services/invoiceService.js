@@ -87,3 +87,33 @@ export async function payInvoice(invoiceId) {
   }
   return Promise.resolve(invoice || null);
 }
+
+/**
+ * Downloads or generates invoice PDF.
+ * Connects to GET /api/invoices/{id}/pdf backend endpoint when available,
+ * or triggers browser print/download fallback.
+ */
+export async function downloadInvoicePdf(invoiceId, invoiceNumber = 'invoice') {
+  try {
+    const response = await fetch(`/api/invoices/${invoiceId}/pdf`);
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      return true;
+    }
+  } catch (e) {
+    console.log('Backend PDF endpoint not reached. Triggering print preview fallback.');
+  }
+
+  // Fallback to browser print/PDF preview dialog
+  window.print();
+  return true;
+}
+
