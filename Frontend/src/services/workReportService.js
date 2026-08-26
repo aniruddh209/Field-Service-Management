@@ -1,74 +1,63 @@
-// ====================================
-// Work Report Service
-// ====================================
-//
-// Manages creation, retrieval, and status updates of technician completion reports.
-//
-// Current: modifies local dummy copy in memory.
-// Future:
-//   GET  /api/service-requests/{requestId}/completion-report
-//   POST /api/service-requests/{requestId}/completion-report
-//   PATCH /api/completion-reports/{id}/approve
-//   PATCH /api/completion-reports/{id}/return-for-correction
-//
-// ====================================
+import api from "../api/api";
+import { workReportData as initialWorkReports } from "../data/workReportData";
 
-import { workReportData } from '../data/workReportData.js';
+let workReportsList = [...initialWorkReports];
 
-let reports = [...workReportData];
-
-/**
- * Retrieves the completion report associated with a service request.
- * @param {number|string} requestId
- */
 export async function getWorkReportByRequestId(requestId) {
-  const report = reports.find(r => r.serviceRequestId === Number(requestId));
-  return Promise.resolve(report || null);
+  try {
+    const response = await api.get(`/WorkReports/request/${requestId}`);
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local work reports store:", err.message);
+  }
+
+  const report = workReportsList.find(w => w.serviceRequestId === Number(requestId));
+  return report || null;
 }
 
-/**
- * Submits or resubmits a technician completion report.
- * If report already exists (e.g. resubmitting after correction), updates it.
- */
-export async function submitWorkReport(requestId, reportData, technicianId, technicianName) {
-  // Remove existing report to support overwriting on correction/resubmission
-  reports = reports.filter(r => r.serviceRequestId !== Number(requestId));
+export async function approveWorkReport(id) {
+  try {
+    const response = await api.put(`/WorkReports/${id}/approve`);
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local work reports store:", err.message);
+  }
 
+  workReportsList = workReportsList.map(w => 
+    w.id === Number(id) ? { ...w, reviewStatus: 'Approved' } : w
+  );
+  return workReportsList.find(w => w.id === Number(id));
+}
+
+export async function returnWorkReportForCorrection(id, notes) {
+  try {
+    const response = await api.put(`/WorkReports/${id}/return-correction`, { notes });
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local work reports store:", err.message);
+  }
+
+  workReportsList = workReportsList.map(w => 
+    w.id === Number(id) ? { ...w, reviewStatus: 'CorrectionRequired', correctionNotes: notes } : w
+  );
+  return workReportsList.find(w => w.id === Number(id));
+}
+
+export async function createWorkReport(reportData) {
+  try {
+    const response = await api.post("/WorkReports", reportData);
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local work reports store:", err.message);
+  }
+
+  const newId = workReportsList.length ? Math.max(...workReportsList.map(w => w.id)) + 1 : 1;
   const newReport = {
-    id: Math.max(...reports.map(r => r.id), 0) + 1,
-    serviceRequestId: Number(requestId),
-    technicianId: Number(technicianId),
-    technicianName,
-    ...reportData,
-    submittedAt: new Date().toISOString(),
+    id: newId,
     reviewStatus: 'PendingReview',
-    correctionNotes: ''
+    submittedAt: new Date().toISOString(),
+    ...reportData
   };
-
-  reports.push(newReport);
-  return Promise.resolve(newReport);
-}
-
-/**
- * Approves a technician report.
- */
-export async function approveWorkReport(requestId) {
-  const report = reports.find(r => r.serviceRequestId === Number(requestId));
-  if (report) {
-    report.reviewStatus = 'Approved';
-    report.correctionNotes = '';
-  }
-  return Promise.resolve(report || null);
-}
-
-/**
- * Returns a technician report for correction.
- */
-export async function returnWorkReportForCorrection(requestId, reason) {
-  const report = reports.find(r => r.serviceRequestId === Number(requestId));
-  if (report) {
-    report.reviewStatus = 'CorrectionRequired';
-    report.correctionNotes = reason;
-  }
-  return Promise.resolve(report || null);
+  workReportsList.push(newReport);
+  return newReport;
 }

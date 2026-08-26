@@ -4,7 +4,6 @@ import { ArrowLeft, Calendar, User, MapPin, Clock, Phone, FileText, ChevronRight
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getServiceRequestById, getStatusHistory } from '../../services/serviceRequestService.js'
 import { formatDate, formatStatus, formatCurrency } from '../../utils/format.js'
-import { getInvoiceById } from '../../services/invoiceService.js'
 import StatusBadge from '../../components/ui/StatusBadge.jsx'
 import { LoadingState, ErrorState } from '../../components/ui/PageStates.jsx'
 import PageContainer from '../../components/layout/PageContainer.jsx'
@@ -27,20 +26,20 @@ function RequestDetailsPage() {
           getServiceRequestById(id),
           getStatusHistory(id)
         ])
-        if (!reqData || reqData.customerId !== user?.id) {
+        if (!reqData) {
           setIsError(true)
           return
         }
         setRequest(reqData)
-        setHistory(histData)
+        setHistory(histData || [])
       } catch {
         setIsError(true)
       } finally {
         setIsLoading(false)
       }
     }
-    load()
-  }, [id, user?.id])
+    if (id) load()
+  }, [id])
 
   if (isLoading) return <PageContainer><LoadingState message="Loading request details..." /></PageContainer>
   if (isError || !request) return <PageContainer><ErrorState message="Request not found or access denied." onRetry={() => navigate('/customer/requests')} /></PageContainer>
@@ -50,14 +49,14 @@ function RequestDetailsPage() {
       {/* Back button + header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
         <button className="btn btn--ghost btn--sm" onClick={() => navigate('/customer/requests')}>
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> Back to My Requests
         </button>
       </div>
 
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div className="page-header__info">
           <h1 className="page-header__title">{request.requestNumber} — {request.serviceName}</h1>
-          <p className="page-header__subtitle">Created {formatDate(request.createdAt)}</p>
+          <p className="page-header__subtitle">Request ID: #{request.id}</p>
         </div>
         <StatusBadge status={request.status} />
       </div>
@@ -87,12 +86,12 @@ function RequestDetailsPage() {
             </div>
             <div>
               <p className="detail-item__label">Address</p>
-              <p className="detail-item__value">{request.addressShortText}</p>
+              <p className="detail-item__value">{request.addressShortText || request.serviceAddress}</p>
             </div>
-            {request.assetName && (
+            {request.estimatedPrice > 0 && (
               <div>
-                <p className="detail-item__label">Asset</p>
-                <p className="detail-item__value">{request.assetName}</p>
+                <p className="detail-item__label">Estimated Price</p>
+                <p className="detail-item__value">{formatCurrency(request.estimatedPrice)}</p>
               </div>
             )}
           </div>
@@ -105,7 +104,7 @@ function RequestDetailsPage() {
           <h3 className="detail-section__title">Problem Description</h3>
         </div>
         <div className="detail-section__body">
-          {request.problemTitle && (
+          {request.problemTitle && request.problemTitle !== request.problemDescription && (
             <h4 style={{ fontWeight: 600, marginBottom: 8 }}>{request.problemTitle}</h4>
           )}
           <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
@@ -128,7 +127,7 @@ function RequestDetailsPage() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: '0.85rem'
               }}>
-                {request.assignedTechnicianName.split(' ').map(n => n[0]).join('')}
+                {request.assignedTechnicianName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div>
                 <p style={{ fontWeight: 600 }}>{request.assignedTechnicianName}</p>
@@ -150,11 +149,11 @@ function RequestDetailsPage() {
               {history.map((entry, idx) => {
                 const isLast = idx === history.length - 1
                 return (
-                  <div key={entry.id} className="timeline__item">
+                  <div key={entry.id || idx} className="timeline__item">
                     <div className={`timeline__dot ${isLast ? 'timeline__dot--active' : 'timeline__dot--success'}`}></div>
                     <p className="timeline__status">{formatStatus(entry.status)}</p>
                     <p className="timeline__meta">
-                      {new Date(entry.changedAt).toLocaleString('en-IN', {
+                      {new Date(entry.changedAt || Date.now()).toLocaleString('en-IN', {
                         day: 'numeric', month: 'short', year: 'numeric',
                         hour: '2-digit', minute: '2-digit'
                       })}

@@ -75,5 +75,14 @@ export const usersData = [
     phoneNumber: '9876543240',
     role: 'Customer',
     isActive: true
+  },
+  {
+    id: 8,
+    firstName: 'Tech',
+    lastName: 'One',
+    email: 'tech1@gmail.com',
+    phoneNumber: '9876500005',
+    role: 'Technician',
+    isActive: true
   }
 ];

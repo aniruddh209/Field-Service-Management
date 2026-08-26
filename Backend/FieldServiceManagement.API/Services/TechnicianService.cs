@@ -1,8 +1,10 @@
-namespace FieldServiceManagement.API.Services;
 using FieldServiceManagement.API.Data;
 using FieldServiceManagement.API.DTOs.Technicians;
 using FieldServiceManagement.API.Models;
 using Microsoft.EntityFrameworkCore;
+
+namespace FieldServiceManagement.API.Services;
+
 public class TechnicianService
 {
     private readonly AppDbContext _context;
@@ -11,7 +13,7 @@ public class TechnicianService
     {
         _context = context;
     }
-    
+
     public async Task<List<TechnicianDto>> GetAllAsync()
     {
         var technicians = await _context.Technicians
@@ -22,41 +24,32 @@ public class TechnicianService
         return technicians.Select(t => new TechnicianDto
         {
             Id = t.Id,
-
             UserId = t.UserId,
 
             FullName = t.User.FullName,
-
             Email = t.User.Email,
-
             PhoneNumber = t.User.PhoneNumber,
 
             EmployeeCode = t.EmployeeCode,
-
             Specialization = t.Specialization,
-
             ExperienceYears = t.ExperienceYears,
 
             Rating = t.Rating,
 
             TotalJobs = t.TotalJobs,
-
             ActiveJobs = t.ActiveJobs,
-
             CompletedJobs = t.CompletedJobs,
 
             IsAvailable = t.IsAvailable,
-
             IsActive = t.IsActive,
 
             Status = t.Status,
-
             CurrentLocation = t.CurrentLocation,
 
             JoiningDate = t.JoiningDate
-
         }).ToList();
     }
+
     
     public async Task<TechnicianDto?> GetByIdAsync(int id)
     {
@@ -70,58 +63,54 @@ public class TechnicianService
         return new TechnicianDto
         {
             Id = technician.Id,
-
             UserId = technician.UserId,
 
             FullName = technician.User.FullName,
-
             Email = technician.User.Email,
-
             PhoneNumber = technician.User.PhoneNumber,
 
             EmployeeCode = technician.EmployeeCode,
-
             Specialization = technician.Specialization,
-
             ExperienceYears = technician.ExperienceYears,
 
             Rating = technician.Rating,
 
             TotalJobs = technician.TotalJobs,
-
             ActiveJobs = technician.ActiveJobs,
-
             CompletedJobs = technician.CompletedJobs,
 
             IsAvailable = technician.IsAvailable,
-
             IsActive = technician.IsActive,
 
             Status = technician.Status,
-
             CurrentLocation = technician.CurrentLocation,
 
             JoiningDate = technician.JoiningDate
         };
     }
-    
-    public async Task<bool> CreateAsync(CreateTechnicianDto dto)
+
+
+    public async Task<bool> CreateAsync(
+        CreateTechnicianDto dto)
     {
+
         var user = await _context.Users
             .FirstOrDefaultAsync(x => x.Id == dto.UserId);
 
         if (user == null)
             return false;
 
+
         if (user.Role != "Technician")
             return false;
+
 
         var codeExists = await _context.Technicians
             .AnyAsync(x => x.EmployeeCode == dto.EmployeeCode);
 
         if (codeExists)
             return false;
-
+        
         var alreadyTechnician = await _context.Technicians
             .AnyAsync(x => x.UserId == dto.UserId);
 
@@ -133,24 +122,25 @@ public class TechnicianService
             UserId = dto.UserId,
 
             EmployeeCode = dto.EmployeeCode,
-
             Specialization = dto.Specialization,
-
             ExperienceYears = dto.ExperienceYears,
 
             CurrentLocation = dto.CurrentLocation,
-
             Notes = dto.Notes,
+
+            Rating = 5,
+
+            TotalJobs = 0,
+            ActiveJobs = 0,
+            CompletedJobs = 0,
 
             Status = "Available",
 
             IsAvailable = true,
-
             IsActive = true,
 
-            CreatedAt = DateTime.UtcNow,
-
-            JoiningDate = DateTime.UtcNow
+            JoiningDate = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
         };
 
         _context.Technicians.Add(technician);
@@ -159,8 +149,11 @@ public class TechnicianService
 
         return true;
     }
+
     
-    public async Task<bool> UpdateAsync(int id, UpdateTechnicianDto dto)
+    public async Task<bool> UpdateAsync(
+        int id,
+        UpdateTechnicianDto dto)
     {
         var technician = await _context.Technicians
             .FirstOrDefaultAsync(t => t.Id == id);
@@ -169,17 +162,24 @@ public class TechnicianService
             return false;
 
         technician.Specialization = dto.Specialization;
+
         technician.ExperienceYears = dto.ExperienceYears;
+
         technician.CurrentLocation = dto.CurrentLocation;
+
         technician.Notes = dto.Notes;
+
         technician.IsAvailable = dto.IsAvailable;
+
         technician.IsActive = dto.IsActive;
+
         technician.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         return true;
     }
+
     
     public async Task<bool> DeactivateAsync(int id)
     {
@@ -193,12 +193,18 @@ public class TechnicianService
             return false;
 
         technician.IsActive = false;
+
+        technician.IsAvailable = false;
+
+        technician.Status = "Inactive";
+
         technician.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         return true;
     }
+
     
     public async Task<bool> ToggleStatusAsync(int id)
     {
@@ -209,12 +215,25 @@ public class TechnicianService
             return false;
 
         technician.IsActive = !technician.IsActive;
+
+        if (!technician.IsActive)
+        {
+            technician.IsAvailable = false;
+            technician.Status = "Inactive";
+        }
+        else
+        {
+            technician.IsAvailable = true;
+            technician.Status = "Available";
+        }
+
         technician.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         return true;
     }
+
     
     public async Task<bool> ChangeWorkStatusAsync(
         int id,
@@ -225,14 +244,7 @@ public class TechnicianService
 
         if (technician == null)
             return false;
-        
-        if (dto.Status != "Available" &&
-            dto.Status != "Busy" &&
-            dto.Status != "On Leave")
-        {
-            return false;
-        }
-        
+
         if (dto.Status != "Available" &&
             dto.Status != "Busy" &&
             dto.Status != "On Leave")
@@ -242,7 +254,8 @@ public class TechnicianService
 
         technician.Status = dto.Status;
 
-        technician.IsAvailable = dto.Status == "Available";
+        technician.IsAvailable =
+            dto.Status == "Available";
 
         technician.UpdatedAt = DateTime.UtcNow;
 
@@ -250,7 +263,7 @@ public class TechnicianService
 
         return true;
     }
-    
+
     
     public async Task<bool> ChangeMyStatusAsync(
         int userId,
@@ -271,7 +284,8 @@ public class TechnicianService
 
         technician.Status = dto.Status;
 
-        technician.IsAvailable = dto.Status == "Available";
+        technician.IsAvailable =
+            dto.Status == "Available";
 
         technician.UpdatedAt = DateTime.UtcNow;
 
@@ -279,13 +293,15 @@ public class TechnicianService
 
         return true;
     }
-    
+
     
     public async Task<List<TechnicianDropdownDto>> GetDropdownAsync()
     {
         var technicians = await _context.Technicians
             .Include(t => t.User)
-            .Where(t => t.IsActive && t.IsAvailable)
+            .Where(t =>
+                t.IsActive &&
+                t.IsAvailable)
             .OrderBy(t => t.User.FirstName)
             .ToListAsync();
 
@@ -301,4 +317,58 @@ public class TechnicianService
     }
     
     
+    public async Task<List<TechnicianDto>> SearchAsync(string name)
+    {
+        var technicians = await _context.Technicians
+            .Include(t => t.User)
+            .Where(t => t.IsActive &&
+                        t.User.FullName.Contains(name))
+            .ToListAsync();
+
+        return technicians.Select(t => new TechnicianDto
+        {
+            Id = t.Id,
+            UserId = t.UserId,
+            FullName = t.User.FullName,
+            Email = t.User.Email,
+            PhoneNumber = t.User.PhoneNumber,
+            EmployeeCode = t.EmployeeCode,
+            Specialization = t.Specialization,
+            ExperienceYears = t.ExperienceYears,
+            Rating = t.Rating,
+            TotalJobs = t.TotalJobs,
+            ActiveJobs = t.ActiveJobs,
+            CompletedJobs = t.CompletedJobs,
+            IsAvailable = t.IsAvailable,
+            IsActive = t.IsActive,
+            Status = t.Status,
+            CurrentLocation = t.CurrentLocation,
+            JoiningDate = t.JoiningDate
+        }).ToList();
+    }
+    
+    //Dashboard
+    public async Task<TechnicianDashboardDto?> GetDashboardAsync(int userId)
+    {
+        var technician = await _context.Technicians
+            .FirstOrDefaultAsync(t => t.UserId == userId);
+
+        if (technician == null)
+            return null;
+
+        return new TechnicianDashboardDto
+        {
+            TotalJobs = technician.TotalJobs,
+
+            ActiveJobs = technician.ActiveJobs,
+
+            CompletedJobs = technician.CompletedJobs,
+
+            IsAvailable = technician.IsAvailable,
+
+            IsActive = technician.IsActive,
+
+            Status = technician.Status
+        };
+    }
 }

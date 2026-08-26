@@ -56,6 +56,21 @@ public class AuthController : ControllerBase
             });
         }
 
+        if (!string.IsNullOrEmpty(dto.Role) && !string.Equals(result.User.Role, dto.Role, StringComparison.OrdinalIgnoreCase))
+        {
+            var isManagementMatch = (dto.Role.Equals("Owner", StringComparison.OrdinalIgnoreCase) || dto.Role.Equals("Manager", StringComparison.OrdinalIgnoreCase))
+                && (result.User.Role.Equals("Owner", StringComparison.OrdinalIgnoreCase) || result.User.Role.Equals("Manager", StringComparison.OrdinalIgnoreCase));
+
+            if (!isManagementMatch)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = $"Access denied: Account is registered as '{result.User.Role}', but you selected the '{dto.Role}' portal. Please select the '{result.User.Role}' portal tab to sign in."
+                });
+            }
+        }
+
         return Ok(new
         {
             success = true,

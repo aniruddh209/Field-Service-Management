@@ -1,88 +1,58 @@
-// ====================================
-// Asset Service
-// ====================================
-//
-// Operations on customer service assets/equipment.
-//
-// Current: modifies local dummy copy in memory (resets on reload).
-// Future: GET/POST/PUT/DELETE /api/assets
-//
-// ====================================
+import api from "../api/api";
+import { assetsData as initialAssets } from "../data/assetsData";
 
-import { assetsData } from '../data/assetsData.js';
+let assetsList = [...initialAssets];
 
-let assets = [...assetsData];
-
-/**
- * Fetches all assets for a customer.
- * Future: GET /api/assets/my
- * @param {number} customerId - Customer identifier
- * @returns {Promise<Array>} List of assets
- */
-export async function getMyAssets(customerId) {
-  return new Promise((resolve) => {
-    resolve(assets.filter(a => a.customerId === customerId));
-  });
+export async function getMyAssets(customerId = 1) {
+  try {
+    const response = await api.get(`/Assets?customerId=${customerId}`);
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+  } catch (err) {
+    console.warn("Backend API unavailable, using local assets store:", err.message);
+  }
+  return assetsList.filter(a => a.customerId === Number(customerId));
 }
 
-/**
- * Retrieves a single asset details.
- * Future: GET /api/assets/{id}
- * @param {number} id - Asset ID
- * @returns {Promise<Object|null>} Asset details or null
- */
-export async function getAssetById(id) {
-  return new Promise((resolve) => {
-    resolve(assets.find(a => a.id === Number(id)) || null);
-  });
+export async function createAsset(assetData) {
+  try {
+    const response = await api.post("/Assets", assetData);
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local assets store:", err.message);
+  }
+
+  const newAsset = {
+    id: assetsList.length ? Math.max(...assetsList.map(a => a.id)) + 1 : 1,
+    customerId: assetData.customerId || 1,
+    isActive: true,
+    ...assetData
+  };
+  assetsList.push(newAsset);
+  return newAsset;
 }
 
-/**
- * Saves a new asset to customer list.
- * Future: POST /api/assets
- * @param {Object} data - Asset DTO
- * @returns {Promise<Object>} Created asset
- */
-export async function createAsset(data) {
-  return new Promise((resolve) => {
-    const newAsset = {
-      ...data,
-      id: Math.max(...assets.map(a => a.id), 0) + 1,
-      isActive: true
-    };
-    assets.push(newAsset);
-    resolve(newAsset);
-  });
+export async function updateAsset(id, assetData) {
+  try {
+    const response = await api.put(`/Assets/${id}`, assetData);
+    if (response.data) return response.data;
+  } catch (err) {
+    console.warn("Backend API unavailable, using local assets store:", err.message);
+  }
+
+  assetsList = assetsList.map(a => a.id === Number(id) ? { ...a, ...assetData } : a);
+  return assetsList.find(a => a.id === Number(id));
 }
 
-/**
- * Updates an asset.
- * Future: PUT /api/assets/{id}
- * @param {number} id - Asset ID
- * @param {Object} data - Asset patch
- * @returns {Promise<Object|null>} Updated asset
- */
-export async function updateAsset(id, data) {
-  return new Promise((resolve) => {
-    const targetIdx = assets.findIndex(a => a.id === Number(id));
-    if (targetIdx === -1) return resolve(null);
-
-    const updated = { ...assets[targetIdx], ...data };
-    assets[targetIdx] = updated;
-    resolve(updated);
-  });
-}
-
-/**
- * Deletes an asset.
- * Future: DELETE /api/assets/{id}
- * @param {number} id - Asset ID
- * @returns {Promise<boolean>} True if found and deleted
- */
 export async function deleteAsset(id) {
-  return new Promise((resolve) => {
-    const originalLen = assets.length;
-    assets = assets.filter(a => a.id !== Number(id));
-    resolve(assets.length < originalLen);
-  });
+  try {
+    await api.delete(`/Assets/${id}`);
+    return { success: true };
+  } catch (err) {
+    console.warn("Backend API unavailable, using local assets store:", err.message);
+  }
+
+  assetsList = assetsList.filter(a => a.id !== Number(id));
+  return { success: true };
 }

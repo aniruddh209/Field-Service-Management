@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Check, Wrench, MapPin, Package, Calendar, FileText, Send, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getServices } from '../../services/serviceCatalogService.js'
@@ -12,7 +12,13 @@ import './NewRequestPage.css'
 
 function NewRequestPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
+
+  // Read pre-selected service from location state or query parameters
+  const preSelectedService = location.state?.selectedService || null
+  const queryServiceId = searchParams.get('serviceId') || location.state?.serviceId || (preSelectedService ? preSelectedService.id : '')
 
   const [services, setServices] = useState([])
   const [addresses, setAddresses] = useState([])
@@ -20,7 +26,7 @@ function NewRequestPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const [form, setForm] = useState({
-    serviceId: '',
+    serviceId: queryServiceId ? Number(queryServiceId) : '',
     addressId: '',
     assetId: '',
     preferredDate: '',
@@ -45,6 +51,12 @@ function NewRequestPage() {
         setAddresses(addrData || [])
         setAssets(assetData || [])
 
+        // Pre-select service ID if passed from Book Service, else default to first service
+        const initialSvcId = queryServiceId ? Number(queryServiceId) : (svcData && svcData.length > 0 ? svcData[0].id : '')
+        if (initialSvcId) {
+          setForm(f => ({ ...f, serviceId: initialSvcId }))
+        }
+
         // Auto-select first address if available
         if (addrData && addrData.length > 0) {
           setForm(f => ({ ...f, addressId: addrData[0].id }))
@@ -54,11 +66,11 @@ function NewRequestPage() {
       }
     }
     if (user?.id) load()
-  }, [user?.id])
+  }, [user?.id, queryServiceId])
 
-  const selectedService = services.find(s => s.id === form.serviceId)
-  const selectedAddress = addresses.find(a => a.id === form.addressId)
-  const selectedAsset = assets.find(a => a.id === form.assetId)
+  const selectedService = services.find(s => s.id === Number(form.serviceId)) || preSelectedService
+  const selectedAddress = addresses.find(a => a.id === Number(form.addressId))
+  const selectedAsset = assets.find(a => a.id === Number(form.assetId))
 
   function validate() {
     const e = {}
@@ -81,10 +93,10 @@ function NewRequestPage() {
       const data = {
         customerId: user.id,
         customerName: `${user.firstName} ${user.lastName}`,
-        serviceId: form.serviceId,
-        serviceName: selectedService ? selectedService.name : '',
+        serviceId: Number(form.serviceId),
+        serviceName: selectedService ? (selectedService.serviceName || selectedService.name) : '',
         addressId: form.addressId,
-        addressShortText: selectedAddress ? `${selectedAddress.addressLine1}, ${selectedAddress.city}` : '',
+        addressShortText: selectedAddress ? `${selectedAddress.addressLine || selectedAddress.addressLine1}, ${selectedAddress.city}` : '',
         assetId: form.assetId || null,
         assetName: selectedAsset ? selectedAsset.name : '',
         preferredDate: form.preferredDate,
@@ -116,7 +128,7 @@ function NewRequestPage() {
           </div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>Request Submitted Successfully!</h2>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Your request <strong>{newRequest?.requestNumber}</strong> has been created.
+            Your request <strong>{newRequest?.requestNumber || 'SR-0001'}</strong> has been created.
           </p>
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.85rem', marginBottom: 24 }}>
             Our operations team will review your request shortly and assign an expert technician.
@@ -162,28 +174,34 @@ function NewRequestPage() {
             </div>
             <div className="form-card__body">
 
-              {/* Service Select */}
+              {/* Service Selection */}
               <div className="form-group">
-                <label className="form-label form-label--required">Select Service</label>
+                <label className="form-label form-label--required">Selected Service</label>
                 <select
                   className={`form-select ${errors.serviceId ? 'form-select--error' : ''}`}
                   value={form.serviceId}
                   onChange={e => {
-                    setForm(f => ({ ...f, serviceId: e.target.value }))
+                    setForm(f => ({ ...f, serviceId: Number(e.target.value) }))
                     if (errors.serviceId) setErrors(err => ({ ...err, serviceId: null }))
                   }}
                 >
                   <option value="">-- Select Service --</option>
                   {services.map(svc => (
                     <option key={svc.id} value={svc.id}>
-                      {svc.name} ({svc.startingPrice ? `Starting at ${formatCurrency(svc.startingPrice)}` : formatCurrency(svc.price || 0)})
+                      {svc.serviceName || svc.name} ({formatCurrency(svc.basePrice || svc.price || 0)})
                     </option>
                   ))}
                 </select>
                 {errors.serviceId && <span className="form-error">{errors.serviceId}</span>}
                 {selectedService && (
-                  <div style={{ marginTop: 6, fontSize: '0.82rem', color: 'var(--color-text-secondary)', background: 'var(--color-surface-hover)', padding: '8px 12px', borderRadius: 6 }}>
-                    {selectedService.description}
+                  <div style={{ marginTop: 8, fontSize: '0.84rem', color: 'var(--color-text-secondary)', background: 'var(--color-surface-hover)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <strong>{selectedService.serviceName || selectedService.name}</strong> ({selectedService.category || 'General'})
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-text-tertiary)', marginTop: 2 }}>{selectedService.description}</div>
+                    </div>
+                    <span style={{ fontWeight: 700, color: 'var(--color-primary)', fontSize: '0.95rem' }}>
+                      {formatCurrency(selectedService.basePrice || selectedService.price || 0)}
+                    </span>
                   </div>
                 )}
               </div>
@@ -206,14 +224,14 @@ function NewRequestPage() {
                     className={`form-select ${errors.addressId ? 'form-select--error' : ''}`}
                     value={form.addressId}
                     onChange={e => {
-                      setForm(f => ({ ...f, addressId: e.target.value }))
+                      setForm(f => ({ ...f, addressId: Number(e.target.value) }))
                       if (errors.addressId) setErrors(err => ({ ...err, addressId: null }))
                     }}
                   >
                     <option value="">-- Select Address --</option>
                     {addresses.map(addr => (
                       <option key={addr.id} value={addr.id}>
-                        {addr.label}: {addr.addressLine1}, {addr.city}
+                        {addr.label || addr.addressTitle}: {addr.addressLine || addr.addressLine1}, {addr.city}
                       </option>
                     ))}
                   </select>
@@ -227,7 +245,7 @@ function NewRequestPage() {
                 <select
                   className="form-select"
                   value={form.assetId}
-                  onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, assetId: e.target.value ? Number(e.target.value) : '' }))}
                 >
                   <option value="">None / Not Applicable</option>
                   {assets.map(asset => (
@@ -274,17 +292,16 @@ function NewRequestPage() {
                   }}
                 >
                   <option value="">-- Select Time Slot --</option>
-                  <option value="09:00">9:00 AM - 10:00 AM</option>
-                  <option value="10:00">10:00 AM - 11:00 AM</option>
-                  <option value="10:30">10:30 AM - 11:30 AM</option>
-                  <option value="11:00">11:00 AM - 12:00 PM</option>
-                  <option value="12:00">12:00 PM - 1:00 PM</option>
-                  <option value="13:00">1:00 PM - 2:00 PM</option>
-                  <option value="14:00">2:00 PM - 3:00 PM</option>
-                  <option value="15:00">3:00 PM - 4:00 PM</option>
-                  <option value="15:30">3:30 PM - 4:30 PM</option>
-                  <option value="16:00">4:00 PM - 5:00 PM</option>
-                  <option value="17:00">5:00 PM - 6:00 PM</option>
+                  <option value="09:00 AM - 10:00 AM">9:00 AM - 10:00 AM</option>
+                  <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
+                  <option value="10:30 AM - 11:30 AM">10:30 AM - 11:30 AM</option>
+                  <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
+                  <option value="12:00 PM - 01:00 PM">12:00 PM - 1:00 PM</option>
+                  <option value="01:00 PM - 02:00 PM">1:00 PM - 2:00 PM</option>
+                  <option value="02:00 PM - 03:00 PM">2:00 PM - 3:00 PM</option>
+                  <option value="03:00 PM - 04:00 PM">3:00 PM - 4:00 PM</option>
+                  <option value="04:00 PM - 05:00 PM">4:00 PM - 5:00 PM</option>
+                  <option value="05:00 PM - 06:00 PM">5:00 PM - 6:00 PM</option>
                 </select>
                 {errors.preferredTime && <span className="form-error">{errors.preferredTime}</span>}
               </div>
@@ -340,15 +357,15 @@ function NewRequestPage() {
               <div className="summary-item">
                 <span className="summary-item__label">Service</span>
                 <span className="summary-item__value">
-                  {selectedService ? selectedService.name : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                  {selectedService ? (selectedService.serviceName || selectedService.name) : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
                 </span>
               </div>
 
               <div className="summary-item">
-                <span className="summary-item__label">Est. Starting Price</span>
+                <span className="summary-item__label">Starting Price</span>
                 <span className="summary-item__value highlight">
                   {selectedService
-                    ? (selectedService.startingPrice ? formatCurrency(selectedService.startingPrice) : formatCurrency(selectedService.price || 0))
+                    ? formatCurrency(selectedService.basePrice || selectedService.price || 0)
                     : '—'}
                 </span>
               </div>
@@ -356,7 +373,7 @@ function NewRequestPage() {
               <div className="summary-item">
                 <span className="summary-item__label">Address</span>
                 <span className="summary-item__value">
-                  {selectedAddress ? `${selectedAddress.label} (${selectedAddress.city})` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                  {selectedAddress ? `${selectedAddress.label || selectedAddress.addressTitle} (${selectedAddress.city})` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
                 </span>
               </div>
 
@@ -377,7 +394,7 @@ function NewRequestPage() {
               <div className="summary-item">
                 <span className="summary-item__label">Preferred Time</span>
                 <span className="summary-item__value">
-                  {form.preferredTime ? `${form.preferredTime}` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                  {form.preferredTime || <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
                 </span>
               </div>
             </div>

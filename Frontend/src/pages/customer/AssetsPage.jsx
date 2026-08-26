@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Package, Plus, Edit, Trash2 } from "lucide-react";
+import { Package, Plus, Edit, Trash2, AlertCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
   getMyAssets,
@@ -17,25 +17,25 @@ const EMPTY_FORM = {
   brand: "",
   model: "",
   serialNumber: "",
-  purchaseDate: "",
-  warrantyExpiry: "",
-  notes: "",
+  description: ""
 };
 
 function AssetsPage() {
   const { user } = useAuth();
   const [assets, setAssets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState("");
 
   async function load() {
     setIsLoading(true);
-    const data = await getMyAssets(user.id);
+    const data = await getMyAssets();
     setAssets(data);
     setIsLoading(false);
   }
@@ -48,49 +48,63 @@ function AssetsPage() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setErrors({});
+    setApiError("");
     setShowModal(true);
   }
 
   function openEdit(asset) {
     setEditingId(asset.id);
     setForm({
-      name: asset.name,
+      name: asset.name || "",
       brand: asset.brand || "",
       model: asset.model || "",
       serialNumber: asset.serialNumber || "",
-      purchaseDate: asset.purchaseDate || "",
-      warrantyExpiry: asset.warrantyExpiry || "",
-      notes: asset.notes || "",
+      description: asset.description || asset.notes || ""
     });
     setErrors({});
+    setApiError("");
     setShowModal(true);
   }
 
   function validate() {
     const e = {};
-    if (!form.name.trim()) e.name = "Name is required";
+    if (!form.name.trim()) e.name = "Asset name is required";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setApiError("");
     if (!validate()) return;
-    const data = { ...form, customerId: user.id };
-    if (editingId) {
-      await updateAsset(editingId, data);
-    } else {
-      await createAsset(data);
+
+    setSubmitting(true);
+    try {
+      if (editingId) {
+        await updateAsset(editingId, form);
+      } else {
+        await createAsset(form);
+      }
+      setShowModal(false);
+      load();
+    } catch (err) {
+      setApiError(err.message || "Failed to save asset. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    setShowModal(false);
-    load();
   }
 
   async function handleDelete() {
-    await deleteAsset(deletingId);
-    setShowConfirm(false);
-    setDeletingId(null);
-    load();
+    setApiError("");
+    try {
+      await deleteAsset(deletingId);
+      setShowConfirm(false);
+      setDeletingId(null);
+      load();
+    } catch (err) {
+      setApiError(err.message || "Failed to delete asset.");
+      setShowConfirm(false);
+    }
   }
 
   if (isLoading)
@@ -116,6 +130,13 @@ function AssetsPage() {
         </div>
       </div>
 
+      {apiError && (
+        <div style={{ padding: '12px 16px', background: 'var(--color-danger-light)', border: '1px solid var(--color-danger)', borderRadius: 8, color: 'var(--color-danger)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertCircle size={18} />
+          <span>{apiError}</span>
+        </div>
+      )}
+
       {assets.length === 0 ? (
         <EmptyState
           icon={Package}
@@ -140,6 +161,7 @@ function AssetsPage() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      flexShrink: 0
                     }}
                   >
                     <Package size={18} />
@@ -148,7 +170,7 @@ function AssetsPage() {
                     <h3 style={{ fontSize: "0.95rem", fontWeight: 600 }}>
                       {asset.name}
                     </h3>
-                    {asset.brand && (
+                    {(asset.brand || asset.model) && (
                       <span
                         style={{
                           fontSize: "0.78rem",
@@ -164,6 +186,7 @@ function AssetsPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={() => openEdit(asset)}
+                    title="Edit Asset"
                   >
                     <Edit size={14} />
                   </button>
@@ -174,6 +197,7 @@ function AssetsPage() {
                       setDeletingId(asset.id);
                       setShowConfirm(true);
                     }}
+                    title="Delete Asset"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -190,29 +214,11 @@ function AssetsPage() {
                   }}
                 >
                   {asset.serialNumber && (
-                    <span>Serial: {asset.serialNumber}</span>
+                    <span><strong>Serial #:</strong> {asset.serialNumber}</span>
                   )}
-                  {asset.purchaseDate && (
-                    <span>
-                      Purchased:{" "}
-                      {new Date(asset.purchaseDate).toLocaleDateString(
-                        "en-IN",
-                        { day: "numeric", month: "short", year: "numeric" },
-                      )}
-                    </span>
-                  )}
-                  {asset.warrantyExpiry && (
-                    <span>
-                      Warranty expires:{" "}
-                      {new Date(asset.warrantyExpiry).toLocaleDateString(
-                        "en-IN",
-                        { day: "numeric", month: "short", year: "numeric" },
-                      )}
-                    </span>
-                  )}
-                  {asset.notes && (
-                    <span style={{ marginTop: 4, fontStyle: "italic" }}>
-                      Note: {asset.notes}
+                  {asset.description && (
+                    <span style={{ marginTop: 4 }}>
+                      {asset.description}
                     </span>
                   )}
                 </div>
@@ -230,7 +236,7 @@ function AssetsPage() {
       >
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label form-label--required">Name</label>
+            <label className="form-label form-label--required">Equipment Name</label>
             <input
               className={`form-input ${errors.name ? "form-input--error" : ""}`}
               value={form.name}
@@ -267,39 +273,16 @@ function AssetsPage() {
               onChange={(e) =>
                 setForm({ ...form, serialNumber: e.target.value })
               }
+              placeholder="e.g. SN-987654"
             />
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Purchase Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={form.purchaseDate}
-                onChange={(e) =>
-                  setForm({ ...form, purchaseDate: e.target.value })
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Warranty Expires</label>
-              <input
-                type="date"
-                className="form-input"
-                value={form.warrantyExpiry}
-                onChange={(e) =>
-                  setForm({ ...form, warrantyExpiry: e.target.value })
-                }
-              />
-            </div>
-          </div>
           <div className="form-group">
-            <label className="form-label">Notes</label>
+            <label className="form-label">Description / Notes</label>
             <textarea
               className="form-textarea"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any additional information..."
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Any additional details about this equipment..."
               rows={3}
             />
           </div>
@@ -308,11 +291,12 @@ function AssetsPage() {
               type="button"
               className="btn btn--outline"
               onClick={() => setShowModal(false)}
+              disabled={submitting}
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
-              {editingId ? "Save Changes" : "Add Asset"}
+            <button type="submit" className="btn btn--primary" disabled={submitting}>
+              {submitting ? "Saving..." : editingId ? "Save Changes" : "Add Asset"}
             </button>
           </div>
         </form>

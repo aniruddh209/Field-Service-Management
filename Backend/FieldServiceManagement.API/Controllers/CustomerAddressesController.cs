@@ -1,55 +1,123 @@
 using System.Security.Claims;
-using FieldServiceManagement.API.Data;
-using FieldServiceManagement.API.Models;
+
+using FieldServiceManagement.API.DTOs.CustomerAddresses;
+using FieldServiceManagement.API.Services;
+
+using FluentValidation;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FieldServiceManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Customer")]
 public class CustomerAddressesController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly CustomerAddressService _addressService;
 
-    public CustomerAddressesController(AppDbContext context)
+    private readonly IValidator<CreateCustomerAddressDto>
+        _createValidator;
+
+    private readonly IValidator<UpdateCustomerAddressDto>
+        _updateValidator;
+
+
+    public CustomerAddressesController(
+        CustomerAddressService addressService,
+        IValidator<CreateCustomerAddressDto> createValidator,
+        IValidator<UpdateCustomerAddressDto> updateValidator)
     {
-        _context = context;
+        _addressService = addressService;
+
+        _createValidator = createValidator;
+
+        _updateValidator = updateValidator;
     }
 
+
+    // CREATE ADDRESS
     [HttpPost]
-    public async Task<IActionResult> Create(CustomerAddress address)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateCustomerAddressDto dto)
     {
-        var customerId = int.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!
-        );
+        var customerId = GetCurrentUserId();
 
-        address.CustomerId = customerId;
+        if (customerId == null)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
 
-        _context.CustomerAddresses.Add(address);
 
-        await _context.SaveChangesAsync();
+        var validationResult =
+            await _createValidator.ValidateAsync(dto);
 
-        return Ok(new
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors
+                    .Select(error => new
+                    {
+                        field = error.PropertyName,
+                        message = error.ErrorMessage
+                    })
+            });
+        }
+
+
+        var address =
+            await _addressService.CreateAsync(
+                customerId.Value,
+                dto);
+
+
+        if (address == null)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Customer not found."
+            });
+        }
+
+
+        return StatusCode(201, new
         {
             success = true,
             message = "Address created successfully.",
             data = address
         });
     }
-    
+
+
+    // GET MY ADDRESSES
     [HttpGet("my")]
     public async Task<IActionResult> GetMyAddresses()
     {
-        var customerId = int.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!
-        );
+        var customerId = GetCurrentUserId();
 
-        var addresses = await _context.CustomerAddresses
-            .Where(x => x.CustomerId == customerId)
-            .ToListAsync();
+        if (customerId == null)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
+
+
+        var addresses =
+            await _addressService
+                .GetMyAddressesAsync(customerId.Value);
+
 
         return Ok(new
         {
@@ -58,18 +126,40 @@ public class CustomerAddressesController : ControllerBase
             data = addresses
         });
     }
-    
-    [HttpGet("{id}")]
+
+
+    // GET ONE ADDRESS
+    [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var customerId = int.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!
-        );
+        if (id <= 0)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Invalid address ID."
+            });
+        }
 
-        var address = await _context.CustomerAddresses
-            .FirstOrDefaultAsync(x =>
-                x.Id == id &&
-                x.CustomerId == customerId);
+
+        var customerId = GetCurrentUserId();
+
+        if (customerId == null)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
+
+
+        var address =
+            await _addressService
+                .GetByIdAsync(
+                    customerId.Value,
+                    id);
+
 
         if (address == null)
         {
@@ -79,6 +169,7 @@ public class CustomerAddressesController : ControllerBase
                 message = "Address not found."
             });
         }
+
 
         return Ok(new
         {
@@ -86,59 +177,61 @@ public class CustomerAddressesController : ControllerBase
             data = address
         });
     }
-    
-    [HttpPut("{id}")]
+
+
+    // UPDATE ADDRESS
+    [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
-        CustomerAddress address)
+        [FromBody] UpdateCustomerAddressDto dto)
     {
-        var customerId = int.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!
-        );
-
-        var existingAddress = await _context.CustomerAddresses
-            .FirstOrDefaultAsync(x =>
-                x.Id == id &&
-                x.CustomerId == customerId);
-
-        if (existingAddress == null)
+        if (id <= 0)
         {
-            return NotFound(new
+            return BadRequest(new
             {
                 success = false,
-                message = "Address not found."
+                message = "Invalid address ID."
             });
         }
 
-        existingAddress.AddressTitle = address.AddressTitle;
-        existingAddress.AddressLine = address.AddressLine;
-        existingAddress.Area = address.Area;
-        existingAddress.City = address.City;
-        existingAddress.State = address.State;
-        existingAddress.Pincode = address.Pincode;
-        existingAddress.Landmark = address.Landmark;
 
-        await _context.SaveChangesAsync();
+        var customerId = GetCurrentUserId();
 
-        return Ok(new
+        if (customerId == null)
         {
-            success = true,
-            message = "Address updated successfully.",
-            data = existingAddress
-        });
-    }
-    
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var customerId = int.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!
-        );
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
 
-        var address = await _context.CustomerAddresses
-            .FirstOrDefaultAsync(x =>
-                x.Id == id &&
-                x.CustomerId == customerId);
+
+        var validationResult =
+            await _updateValidator.ValidateAsync(dto);
+
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors
+                    .Select(error => new
+                    {
+                        field = error.PropertyName,
+                        message = error.ErrorMessage
+                    })
+            });
+        }
+
+
+        var address =
+            await _addressService.UpdateAsync(
+                customerId.Value,
+                id,
+                dto);
+
 
         if (address == null)
         {
@@ -149,14 +242,82 @@ public class CustomerAddressesController : ControllerBase
             });
         }
 
-        _context.CustomerAddresses.Remove(address);
 
-        await _context.SaveChangesAsync();
+        return Ok(new
+        {
+            success = true,
+            message = "Address updated successfully.",
+            data = address
+        });
+    }
+
+
+    // DELETE ADDRESS
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        if (id <= 0)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Invalid address ID."
+            });
+        }
+
+
+        var customerId = GetCurrentUserId();
+
+        if (customerId == null)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
+
+
+        var result =
+            await _addressService.DeleteAsync(
+                customerId.Value,
+                id);
+
+
+        if (!result)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "Address not found."
+            });
+        }
+
 
         return Ok(new
         {
             success = true,
             message = "Address deleted successfully."
         });
+    }
+
+
+    // GET CURRENT USER ID FROM JWT
+    private int? GetCurrentUserId()
+    {
+        var claim =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+
+        if (!int.TryParse(
+                claim,
+                out var userId))
+        {
+            return null;
+        }
+
+
+        return userId;
     }
 }

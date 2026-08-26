@@ -8,7 +8,10 @@ public class ServiceRequest
     [Key]
     public int Id { get; set; }
 
-    // Foreign Keys
+
+    // =========================================================
+    // FOREIGN KEYS
+    // =========================================================
 
     [Required]
     public int CustomerId { get; set; }
@@ -16,9 +19,18 @@ public class ServiceRequest
     [Required]
     public int ServiceId { get; set; }
 
+    // Technician is optional because a request
+    // can exist before a technician is assigned.
     public int? TechnicianId { get; set; }
 
-    // Request Details
+    // Asset is optional because a customer may create
+    // a service request without selecting an asset.
+    public int? AssetId { get; set; }
+
+
+    // =========================================================
+    // REQUEST DETAILS
+    // =========================================================
 
     [Required]
     [StringLength(500, MinimumLength = 10)]
@@ -45,14 +57,27 @@ public class ServiceRequest
 
     public DateTime? UpdatedAt { get; set; }
 
-    // Navigation Properties
 
+    // =========================================================
+    // NAVIGATION PROPERTIES
+    // =========================================================
+
+    // Customer
     [ForeignKey(nameof(CustomerId))]
     public User Customer { get; set; } = null!;
 
+
+    // Service
     [ForeignKey(nameof(ServiceId))]
     public Service Service { get; set; } = null!;
 
+
+    // Technician
     [ForeignKey(nameof(TechnicianId))]
     public Technician? Technician { get; set; }
+
+
+    // Asset
+    [ForeignKey(nameof(AssetId))]
+    public Asset? Asset { get; set; }
 }

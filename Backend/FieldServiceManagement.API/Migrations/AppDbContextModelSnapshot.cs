@@ -22,6 +22,51 @@ namespace FieldServiceManagement.API.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("FieldServiceManagement.API.Models.Asset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("Assets");
+                });
+
             modelBuilder.Entity("FieldServiceManagement.API.Models.CustomerAddress", b =>
                 {
                     b.Property<int>("Id")
@@ -52,12 +97,6 @@ namespace FieldServiceManagement.API.Migrations
                     b.Property<string>("Landmark")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("Latitude")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("Longitude")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("Pincode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -68,7 +107,57 @@ namespace FieldServiceManagement.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CustomerId");
+
                     b.ToTable("CustomerAddresses");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.InventoryItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("QuantityInStock")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReorderLevel")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SKU")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SKU")
+                        .IsUnique();
+
+                    b.ToTable("InventoryItems");
                 });
 
             modelBuilder.Entity("FieldServiceManagement.API.Models.Invoice", b =>
@@ -222,6 +311,9 @@ namespace FieldServiceManagement.API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AssetId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -264,6 +356,8 @@ namespace FieldServiceManagement.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssetId");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ServiceId");
@@ -303,6 +397,42 @@ namespace FieldServiceManagement.API.Migrations
                     b.ToTable("StatusHistories");
                 });
 
+            modelBuilder.Entity("FieldServiceManagement.API.Models.StockMovement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityAfterChange")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityChange")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("StockMovements");
+                });
+
             modelBuilder.Entity("FieldServiceManagement.API.Models.Technician", b =>
                 {
                     b.Property<int>("Id")
@@ -321,11 +451,6 @@ namespace FieldServiceManagement.API.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CurrentLocation")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -336,11 +461,6 @@ namespace FieldServiceManagement.API.Migrations
 
                     b.Property<int>("ExperienceYears")
                         .HasColumnType("int");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -354,11 +474,6 @@ namespace FieldServiceManagement.API.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
 
                     b.Property<decimal>("Rating")
                         .HasColumnType("decimal(3,2)");
@@ -376,7 +491,7 @@ namespace FieldServiceManagement.API.Migrations
                     b.Property<int>("TotalJobs")
                         .HasColumnType("int");
 
-                    b.Property<DateTime>("UpdatedAt")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("UserId")
@@ -453,30 +568,32 @@ namespace FieldServiceManagement.API.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("CorrectionReason")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("CustomerSignature")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("Diagnosis")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<decimal>("LabourHours")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("ManagerReviewStatus")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PartsUsed")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("Resolution")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<int>("ServiceRequestId")
                         .HasColumnType("int");
@@ -485,6 +602,7 @@ namespace FieldServiceManagement.API.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("SuggestedLabourCharge")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("TechnicianId")
@@ -492,22 +610,90 @@ namespace FieldServiceManagement.API.Migrations
 
                     b.Property<string>("TechnicianRemarks")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<int>("WarrantyDays")
                         .HasColumnType("int");
 
                     b.Property<string>("WorkPerformed")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ServiceRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("TechnicianId");
 
                     b.ToTable("WorkReports");
                 });
 
+            modelBuilder.Entity("FieldServiceManagement.API.Models.WorkReportPart", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("InventoryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("WorkReportId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("WorkReportId");
+
+                    b.ToTable("WorkReportParts");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.Asset", b =>
+                {
+                    b.HasOne("FieldServiceManagement.API.Models.User", "Customer")
+                        .WithMany("Assets")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.CustomerAddress", b =>
+                {
+                    b.HasOne("FieldServiceManagement.API.Models.User", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("FieldServiceManagement.API.Models.ServiceRequest", b =>
                 {
+                    b.HasOne("FieldServiceManagement.API.Models.Asset", "Asset")
+                        .WithMany("ServiceRequests")
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("FieldServiceManagement.API.Models.User", "Customer")
                         .WithMany("ServiceRequests")
                         .HasForeignKey("CustomerId")
@@ -525,6 +711,8 @@ namespace FieldServiceManagement.API.Migrations
                         .HasForeignKey("TechnicianId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.Navigation("Asset");
+
                     b.Navigation("Customer");
 
                     b.Navigation("Service");
@@ -532,13 +720,82 @@ namespace FieldServiceManagement.API.Migrations
                     b.Navigation("Technician");
                 });
 
+            modelBuilder.Entity("FieldServiceManagement.API.Models.StockMovement", b =>
+                {
+                    b.HasOne("FieldServiceManagement.API.Models.InventoryItem", "InventoryItem")
+                        .WithMany("StockMovements")
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FieldServiceManagement.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("FieldServiceManagement.API.Models.Technician", b =>
                 {
-                    b.HasOne("FieldServiceManagement.API.Models.User", null)
+                    b.HasOne("FieldServiceManagement.API.Models.User", "User")
                         .WithOne("Technician")
                         .HasForeignKey("FieldServiceManagement.API.Models.Technician", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.WorkReport", b =>
+                {
+                    b.HasOne("FieldServiceManagement.API.Models.ServiceRequest", "ServiceRequest")
+                        .WithOne()
+                        .HasForeignKey("FieldServiceManagement.API.Models.WorkReport", "ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FieldServiceManagement.API.Models.Technician", "Technician")
+                        .WithMany()
+                        .HasForeignKey("TechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ServiceRequest");
+
+                    b.Navigation("Technician");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.WorkReportPart", b =>
+                {
+                    b.HasOne("FieldServiceManagement.API.Models.InventoryItem", "InventoryItem")
+                        .WithMany("WorkReportParts")
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FieldServiceManagement.API.Models.WorkReport", "WorkReport")
+                        .WithMany("Parts")
+                        .HasForeignKey("WorkReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InventoryItem");
+
+                    b.Navigation("WorkReport");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.Asset", b =>
+                {
+                    b.Navigation("ServiceRequests");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.InventoryItem", b =>
+                {
+                    b.Navigation("StockMovements");
+
+                    b.Navigation("WorkReportParts");
                 });
 
             modelBuilder.Entity("FieldServiceManagement.API.Models.Service", b =>
@@ -553,9 +810,16 @@ namespace FieldServiceManagement.API.Migrations
 
             modelBuilder.Entity("FieldServiceManagement.API.Models.User", b =>
                 {
+                    b.Navigation("Assets");
+
                     b.Navigation("ServiceRequests");
 
                     b.Navigation("Technician");
+                });
+
+            modelBuilder.Entity("FieldServiceManagement.API.Models.WorkReport", b =>
+                {
+                    b.Navigation("Parts");
                 });
 #pragma warning restore 612, 618
         }

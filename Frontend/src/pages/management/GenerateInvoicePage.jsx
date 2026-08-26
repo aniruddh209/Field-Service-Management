@@ -7,7 +7,7 @@ import { createInvoice, getAllInvoices } from '../../services/invoiceService.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { calculateInvoiceBreakdown } from '../../utils/invoiceCalculations.js'
 import { formatDate, formatCurrency } from '../../utils/format.js'
-import { LoadingState } from '../../components/ui/PageStates.jsx'
+import { LoadingState, ErrorState } from '../../components/ui/PageStates.jsx'
 import PageContainer from '../../components/layout/PageContainer.jsx'
 
 function GenerateInvoicePage() {

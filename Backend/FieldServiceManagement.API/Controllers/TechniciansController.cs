@@ -1,7 +1,13 @@
+using System.Security.Claims;
+
 using FieldServiceManagement.API.DTOs.Technicians;
 using FieldServiceManagement.API.Services;
-using Microsoft.AspNetCore.Mvc;
+
+using FluentValidation;
+
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
 namespace FieldServiceManagement.API.Controllers;
 
 [Authorize(Roles = "Owner,Manager")]
@@ -11,16 +17,33 @@ public class TechniciansController : ControllerBase
 {
     private readonly TechnicianService _technicianService;
 
-    public TechniciansController(TechnicianService technicianService)
+    private readonly IValidator<CreateTechnicianDto>
+        _createTechnicianValidator;
+    private readonly IValidator<UpdateTechnicianDto>
+        _updateTechnicianValidator;
+    
+
+    public TechniciansController(
+        TechnicianService technicianService,
+        IValidator<CreateTechnicianDto> createTechnicianValidator,
+        IValidator<UpdateTechnicianDto> updateTechnicianValidator)
     {
         _technicianService = technicianService;
+
+        _createTechnicianValidator =
+            createTechnicianValidator;
+
+        _updateTechnicianValidator =
+            updateTechnicianValidator;
     }
+
     
-    [Authorize(Roles = "Owner,Manager")]
+
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var technicians = await _technicianService.GetAllAsync();
+        var technicians =
+            await _technicianService.GetAllAsync();
 
         return Ok(new
         {
@@ -29,12 +52,47 @@ public class TechniciansController : ControllerBase
             data = technicians
         });
     }
+    
 
-    [Authorize(Roles = "Owner,Manager")]
-    [HttpGet("{id}")]
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Search name is required."
+            });
+        }
+
+        var technicians =
+            await _technicianService.SearchAsync(name);
+
+        if (technicians.Count == 0)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "No technicians found."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            count = technicians.Count,
+            data = technicians
+        });
+    }
+    
+
+    [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var technician = await _technicianService.GetByIdAsync(id);
+        var technician =
+            await _technicianService.GetByIdAsync(id);
 
         if (technician == null)
         {
@@ -52,46 +110,35 @@ public class TechniciansController : ControllerBase
         });
     }
     
-    
-    // public async Task<List<TechnicianDto>> SearchAsync(string name)
-    // {
-    //     var technicians = await _context.Technicians
-    //         .Include(t => t.User)
-    //         .Where(t => t.IsActive &&
-    //                     (t.User.FirstName.Contains(name) ||
-    //                      t.User.LastName.Contains(name)))
-    //         .ToListAsync();
-    //
-    //     return technicians.Select(t => new TechnicianDto
-    //     {
-    //         Id = t.Id,
-    //         UserId = t.UserId,
-    //         FullName = t.User.FullName,
-    //         Email = t.User.Email,
-    //         PhoneNumber = t.User.PhoneNumber,
-    //         EmployeeCode = t.EmployeeCode,
-    //         Specialization = t.Specialization,
-    //         ExperienceYears = t.ExperienceYears,
-    //         Rating = t.Rating,
-    //         TotalJobs = t.TotalJobs,
-    //         ActiveJobs = t.ActiveJobs,
-    //         CompletedJobs = t.CompletedJobs,
-    //         IsAvailable = t.IsAvailable,
-    //         IsActive = t.IsActive,
-    //         Status = t.Status,
-    //         CurrentLocation = t.CurrentLocation,
-    //         JoiningDate = t.JoiningDate
-    //     }).ToList();
-    // }
-    
+
     [Authorize(Roles = "Owner")]
     [HttpPost]
-    public async Task<IActionResult> Create(CreateTechnicianDto dto)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateTechnicianDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        // FluentValidation
+        var validationResult =
+            await _createTechnicianValidator.ValidateAsync(dto);
 
-        var result = await _technicianService.CreateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors
+                    .Select(error => new
+                    {
+                        field = error.PropertyName,
+                        message = error.ErrorMessage
+                    })
+            });
+        }
+
+
+        var result =
+            await _technicianService.CreateAsync(dto);
+
 
         if (!result)
         {
@@ -102,23 +149,51 @@ public class TechniciansController : ControllerBase
             });
         }
 
-        return Ok(new
+
+        return StatusCode(201, new
         {
             success = true,
             message = "Technician created successfully."
         });
     }
+
     
+
     [Authorize(Roles = "Owner,Manager")]
-    [HttpPut("{id}")]
+    [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
-        UpdateTechnicianDto dto)
+        [FromBody] UpdateTechnicianDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        if (id <= 0)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Invalid technician ID."
+            });
+        }
 
-        var result = await _technicianService.UpdateAsync(id, dto);
+        var validationResult =
+            await _updateTechnicianValidator.ValidateAsync(dto);
+
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors
+                    .Select(error => new
+                    {
+                        field = error.PropertyName,
+                        message = error.ErrorMessage
+                    })
+            });
+        }
+
+        var result =
+            await _technicianService.UpdateAsync(id, dto);
 
         if (!result)
         {
@@ -135,34 +210,42 @@ public class TechniciansController : ControllerBase
             message = "Technician updated successfully."
         });
     }
+
     
+
     [Authorize(Roles = "Owner")]
-    [HttpPatch("{id}/deactivate")]
+    [HttpPatch("{id:int}/deactivate")]
     public async Task<IActionResult> Deactivate(int id)
     {
-        var result = await _technicianService.DeactivateAsync(id);
+        var result =
+            await _technicianService.DeactivateAsync(id);
 
         if (!result)
         {
             return NotFound(new
             {
                 success = false,
-                message = "Technician not found or already inactive."
+                message =
+                    "Technician not found or already inactive."
             });
         }
 
         return Ok(new
         {
             success = true,
-            message = "Technician deactivated successfully."
+            message =
+                "Technician deactivated successfully."
         });
     }
+
     
+
     [Authorize(Roles = "Owner")]
-    [HttpPatch("{id}/toggle")]
+    [HttpPatch("{id:int}/toggle")]
     public async Task<IActionResult> Toggle(int id)
     {
-        var result = await _technicianService.ToggleStatusAsync(id);
+        var result =
+            await _technicianService.ToggleStatusAsync(id);
 
         if (!result)
         {
@@ -176,38 +259,48 @@ public class TechniciansController : ControllerBase
         return Ok(new
         {
             success = true,
-            message = "Technician status updated successfully."
+            message =
+                "Technician status updated successfully."
         });
     }
+
     
+
     [Authorize(Roles = "Owner,Manager")]
-    [HttpPatch("{id}/work-status")]
+    [HttpPatch("{id:int}/work-status")]
     public async Task<IActionResult> ChangeWorkStatus(
         int id,
-        ChangeWorkStatusDto dto)
+        [FromBody] ChangeWorkStatusDto dto)
     {
         if (!ModelState.IsValid)
+        {
             return BadRequest(ModelState);
+        }
 
-        var result = await _technicianService
-            .ChangeWorkStatusAsync(id, dto);
+        var result =
+            await _technicianService
+                .ChangeWorkStatusAsync(id, dto);
 
         if (!result)
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Unable to update technician status."
+                message =
+                    "Unable to update technician status."
             });
         }
 
         return Ok(new
         {
             success = true,
-            message = "Status updated successfully."
+            message =
+                "Status updated successfully."
         });
     }
+
     
+
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("dropdown")]
     public async Task<IActionResult> GetDropdown()
@@ -221,33 +314,96 @@ public class TechniciansController : ControllerBase
             data = technicians
         });
     }
+
     
+
     [Authorize(Roles = "Technician")]
     [HttpPatch("my-status")]
-    public async Task<IActionResult> ChangeMyStatus(ChangeWorkStatusDto dto)
+    public async Task<IActionResult> ChangeMyStatus(
+        [FromBody] ChangeWorkStatusDto dto)
     {
         if (!ModelState.IsValid)
+        {
             return BadRequest(ModelState);
+        }
 
-        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+        var claim =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
 
-        var result = await _technicianService.ChangeMyStatusAsync(userId, dto);
+        if (!int.TryParse(claim, out int userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
+
+
+        var result =
+            await _technicianService
+                .ChangeMyStatusAsync(userId, dto);
+
 
         if (!result)
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Unable to update your status."
+                message =
+                    "Unable to update your status."
             });
         }
+
 
         return Ok(new
         {
             success = true,
-            message = "Your status updated successfully."
+            message =
+                "Your status updated successfully."
         });
     }
+
     
 
+    [Authorize(Roles = "Technician")]
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard()
+    {
+        var claim =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(claim, out int userId))
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                message = "Invalid user identity."
+            });
+        }
+
+
+        var dashboard =
+            await _technicianService
+                .GetDashboardAsync(userId);
+
+
+        if (dashboard == null)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "Technician not found."
+            });
+        }
+
+
+        return Ok(new
+        {
+            success = true,
+            data = dashboard
+        });
+    }
 }

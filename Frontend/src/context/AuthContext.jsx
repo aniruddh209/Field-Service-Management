@@ -1,110 +1,169 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useState
+} from "react";
 
-// ====================================
-// AuthContext — Temporary Demo Auth
-// ====================================
-//
-// This provides simple demo authentication for the frontend.
-//
-// IMPORTANT: This is NOT real security.
-// In production, this will be replaced by:
-//   - ASP.NET Core Web API
-//   - JWT access tokens
-//   - Role-based authorization from the server
-//
-// The demo user is stored in localStorage so the login
-// persists when you refresh the browser during development.
-// No passwords are stored. No tokens are generated.
-// ====================================
+import authService from "../services/authService";
 
-const AuthContext = createContext()
-
-// Demo users — one for each role, used by the quick login feature
-export const demoUsers = {
-  Customer: {
-    id: 1,
-    firstName: 'Arjun',
-    lastName: 'Mehta',
-    email: 'arjun.mehta@example.com',
-    phoneNumber: '9876543210',
-    role: 'Customer'
-  },
-  Owner: {
-    id: 2,
-    firstName: 'Aniruddh',
-    lastName: 'Parmar',
-    email: 'owner@fieldservice.demo',
-    phoneNumber: '9876500000',
-    role: 'Owner'
-  },
-  Manager: {
-    id: 3,
-    firstName: 'Kavya',
-    lastName: 'Sharma',
-    email: 'manager@fieldservice.demo',
-    phoneNumber: '9876500002',
-    role: 'Manager'
-  },
-  Technician: {
-    id: 4,
-    firstName: 'Ravi',
-    lastName: 'Kumar',
-    email: 'ravi.kumar@fieldservice.demo',
-    phoneNumber: '9876500001',
-    role: 'Technician',
-    technicianId: 1
-  }
-}
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  // Load demo user from localStorage on mount
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('fieldservice-demo-user')
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return null
-      }
-    }
-    return null
-  })
 
-  const isAuthenticated = user !== null
+    const [user, setUser] = useState(null);
 
-  // Save to localStorage whenever user changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('fieldservice-demo-user', JSON.stringify(user))
-    } else {
-      localStorage.removeItem('fieldservice-demo-user')
-    }
-  }, [user])
+    const [loading, setLoading] = useState(true);
 
-  // Login — sets the user in state (demo only, no API call)
-  // Future: POST /api/auth/login → JWT token
-  const login = (userData) => {
-    setUser(userData)
-  }
 
-  // Logout — clears the user
-  // Future: POST /api/auth/logout → invalidate token
-  const logout = () => {
-    setUser(null)
-  }
+    // --------------------------------------------------
+    // RESTORE AUTHENTICATION ON PAGE REFRESH
+    // --------------------------------------------------
 
-  return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  )
+    useEffect(() => {
+
+        try {
+
+            const storedUser =
+                authService.getCurrentUser();
+
+            setUser(storedUser);
+
+        } catch (error) {
+
+            console.error(
+                "Failed to restore authentication:",
+                error
+            );
+
+            authService.logout();
+
+            setUser(null);
+
+        } finally {
+
+            setLoading(false);
+
+        }
+
+    }, []);
+
+
+    // --------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------
+
+    const login = async (credentials, password, expectedRole) => {
+        let payload;
+        if (typeof credentials === "object" && credentials !== null) {
+            payload = credentials;
+            if (!expectedRole && credentials.role) {
+                expectedRole = credentials.role;
+            }
+        } else {
+            payload = { email: credentials, password, role: expectedRole };
+        }
+
+        const result = await authService.login(payload, password, expectedRole);
+
+        if (result?.success && result?.data?.user) {
+            setUser(result.data.user);
+            return result.data.user;
+        }
+
+        if (result?.user) {
+            setUser(result.user);
+            return result.user;
+        }
+
+        if (result?.success === false) {
+            setUser(null);
+            throw new Error(result?.message || "Invalid email or password.");
+        }
+
+        return result;
+    };
+
+
+    // --------------------------------------------------
+    // REGISTER
+    // --------------------------------------------------
+
+    const register = async (userData) => {
+
+        return await authService.register(
+            userData
+        );
+
+    };
+
+
+    // --------------------------------------------------
+    // LOGOUT
+    // --------------------------------------------------
+
+    const logout = () => {
+
+        authService.logout();
+
+        setUser(null);
+
+    };
+
+
+    // --------------------------------------------------
+    // AUTHENTICATION STATUS
+    // --------------------------------------------------
+
+    const isAuthenticated =
+        !!user;
+
+
+    // --------------------------------------------------
+    // CONTEXT VALUE
+    // --------------------------------------------------
+
+    const value = {
+
+        user,
+
+        loading,
+
+        isAuthenticated,
+
+        login,
+
+        register,
+
+        logout
+
+    };
+
+
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
 }
 
-// Custom hook to access auth state from any component
+
+// --------------------------------------------------
+// CUSTOM HOOK
+// --------------------------------------------------
+
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used inside AuthProvider')
-  }
-  return context
+
+    const context =
+        useContext(AuthContext);
+
+    if (!context) {
+
+        throw new Error(
+            "useAuth must be used inside AuthProvider"
+        );
+
+    }
+
+    return context;
 }

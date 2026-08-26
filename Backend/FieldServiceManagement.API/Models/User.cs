@@ -8,6 +8,11 @@ public class User
     [Key]
     public int Id { get; set; }
 
+
+    // =========================================================
+    // USER INFORMATION
+    // =========================================================
+
     [Required]
     [StringLength(100, MinimumLength = 2)]
     public string FirstName { get; set; } = string.Empty;
@@ -41,12 +46,38 @@ public class User
 
     public DateTime? UpdatedAt { get; set; }
 
-    [NotMapped]
-    public string FullName => $"{FirstName} {LastName}";
 
+    // =========================================================
+    // COMPUTED PROPERTY
+    // =========================================================
+
+    [NotMapped]
+    public string FullName =>
+        $"{FirstName} {LastName}";
+
+
+    // =========================================================
+    // TECHNICIAN RELATIONSHIP
+    // =========================================================
+
+    // One User can have one Technician.
     public Technician? Technician { get; set; }
 
-    // public Customer? Customer { get; set; }
-    
-    public ICollection<ServiceRequest> ServiceRequests { get; set; } = new List<ServiceRequest>();
+
+    // =========================================================
+    // ASSET RELATIONSHIP
+    // =========================================================
+
+    // One Customer/User can have many Assets.
+    public ICollection<Asset> Assets { get; set; }
+        = new List<Asset>();
+
+
+    // =========================================================
+    // SERVICE REQUEST RELATIONSHIP
+    // =========================================================
+
+    // One Customer/User can have many ServiceRequests.
+    public ICollection<ServiceRequest> ServiceRequests { get; set; }
+        = new List<ServiceRequest>();
 }

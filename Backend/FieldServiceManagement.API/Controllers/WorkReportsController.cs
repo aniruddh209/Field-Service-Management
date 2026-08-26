@@ -1,93 +1,312 @@
-using FieldServiceManagement.API.Data;
-using FieldServiceManagement.API.Models;
+using FieldServiceManagement.API.DTOs.WorkReports;
+using FieldServiceManagement.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FieldServiceManagement.API.Controllers;
 
-[Route("api/[controller]")]
+[Authorize]
 [ApiController]
+[Route("api/[controller]")]
 public class WorkReportsController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly WorkReportService _service;
 
-    public WorkReportsController(AppDbContext context)
+    public WorkReportsController(WorkReportService service)
     {
-        _context = context;
+        _service = service;
     }
 
-    // GET : api/WorkReports
-    [HttpGet]
-    public IActionResult GetAllWorkReports()
-    {
-        return Ok(_context.WorkReports.ToList());
-    }
+    
+    // TECHNICIAN THINGS
 
-    // GET : api/WorkReports/1
-    [HttpGet("{id}")]
-    public IActionResult GetWorkReportById(int id)
-    {
-        var report = _context.WorkReports.Find(id);
-
-        if (report == null)
-            return NotFound("Work Report Not Found");
-
-        return Ok(report);
-    }
-
-    // POST : api/WorkReports
+    // Create Work Report
+    [Authorize(Roles = "Technician")]
     [HttpPost]
-    public IActionResult InsertWorkReport(WorkReport report)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateWorkReportDto dto)
     {
-        _context.WorkReports.Add(report);
-        _context.SaveChanges();
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
 
-        return Ok("Work Report Added Successfully");
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!
+        );
+
+        var result =
+            await _service.CreateAsync(
+                userId,
+                dto);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to create work report."
+            });
+        }
+
+        return StatusCode(201, new
+        {
+            success = true,
+            message = "Work report created successfully."
+        });
     }
-
-    // PUT : api/WorkReports/1
-    [HttpPut("{id}")]
-    public IActionResult UpdateWorkReport(int id, WorkReport report)
+    
+    // Get technician's own work reports
+    [Authorize(Roles = "Technician")]
+    [HttpGet("technician/my")]
+    public async Task<IActionResult> GetMyReports()
     {
-        if (id != report.Id)
-            return BadRequest("Work Report Id Mismatch");
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!
+        );
 
-        var existingReport = _context.WorkReports.Find(id);
+        var reports =
+            await _service.GetMyReportsAsync(userId);
 
-        if (existingReport == null)
-            return NotFound("Work Report Not Found");
-
-        existingReport.ServiceRequestId = report.ServiceRequestId;
-        existingReport.TechnicianId = report.TechnicianId;
-        existingReport.Diagnosis = report.Diagnosis;
-        existingReport.WorkPerformed = report.WorkPerformed;
-        existingReport.LabourHours = report.LabourHours;
-        existingReport.SuggestedLabourCharge = report.SuggestedLabourCharge;
-        existingReport.PartsUsed = report.PartsUsed;
-        existingReport.Resolution = report.Resolution;
-        existingReport.CustomerSignature = report.CustomerSignature;
-        existingReport.TechnicianRemarks = report.TechnicianRemarks;
-        existingReport.WarrantyDays = report.WarrantyDays;
-        existingReport.ManagerReviewStatus = report.ManagerReviewStatus;
-        existingReport.CorrectionReason = report.CorrectionReason;
-        existingReport.SubmittedAt = report.SubmittedAt;
-
-        _context.SaveChanges();
-
-        return Ok("Work Report Updated Successfully");
+        return Ok(new
+        {
+            success = true,
+            count = reports.Count,
+            data = reports
+        });
     }
-
-    // DELETE : api/WorkReports/1
-    [HttpDelete("{id}")]
-    public IActionResult DeleteWorkReport(int id)
+    
+    // Add part to work report
+    [Authorize(Roles = "Technician")]
+    [HttpPost("{id:int}/parts")]
+    public async Task<IActionResult> AddPart(
+        int id,
+        [FromBody] AddWorkReportPartDto dto)
     {
-        var report = _context.WorkReports.Find(id);
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!
+        );
+
+        var result = await _service.AddPartAsync(
+            id,
+            userId,
+            dto);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to add part. Check the work report, inventory item, or available stock."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Part added to work report successfully."
+        });
+    }
+    
+    // Remove part from work report
+    [Authorize(Roles = "Technician")]
+    [HttpDelete("{id:int}/parts/{partId:int}")]
+    public async Task<IActionResult> RemovePart(
+        int id,
+        int partId)
+    {
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!
+        );
+
+        var result = await _service.RemovePartAsync(
+            id,
+            partId,
+            userId);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to remove part from work report."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Part removed successfully."
+        });
+    }
+    
+    
+// OWNER / MANAGER THINGS
+
+// Get all work reports
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var reports = await _service.GetAllAsync();
+
+        return Ok(new
+        {
+            success = true,
+            count = reports.Count,
+            data = reports
+        });
+    }
+    
+    // Get work report by ID
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var report = await _service.GetByIdAsync(id);
 
         if (report == null)
-            return NotFound("Work Report Not Found");
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "Work report not found."
+            });
+        }
 
-        _context.WorkReports.Remove(report);
-        _context.SaveChanges();
-
-        return Ok("Work Report Deleted Successfully");
+        return Ok(new
+        {
+            success = true,
+            data = report
+        });
     }
+    
+    // Approve work report
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpPatch("{id:int}/approve")]
+    public async Task<IActionResult> Approve(int id)
+    {
+        var result =
+            await _service.ApproveAsync(id);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to approve work report."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Work report approved successfully."
+        });
+    }
+    
+    // Request correction for work report
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpPatch("{id:int}/correction")]
+    public async Task<IActionResult> RequestCorrection(
+        int id,
+        [FromBody] RequestCorrectionDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result =
+            await _service.RequestCorrectionAsync(
+                id,
+                dto.CorrectionReason);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to request correction."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Correction requested successfully."
+        });
+    }
+    
+    
+    // Update work report
+    [Authorize(Roles = "Technician")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(
+        int id,
+        [FromBody] UpdateWorkReportDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userId = int.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!
+        );
+
+        var result =
+            await _service.UpdateAsync(
+                id,
+                userId,
+                dto);
+
+        if (!result)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Unable to update work report."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            message = "Work report updated successfully."
+        });
+    }
+    
+    
+    // Get work reports by review status
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpGet("status/{status}")]
+    public async Task<IActionResult> GetByStatus(string status)
+    {
+        var reports =
+            await _service.GetByStatusAsync(status);
+
+        return Ok(new
+        {
+            success = true,
+            count = reports.Count,
+            data = reports
+        });
+    }
+    
+    // Management dashboard
+    [Authorize(Roles = "Owner,Manager")]
+    [HttpGet("management-dashboard")]
+    public async Task<IActionResult> GetManagementDashboard()
+    {
+        var dashboard =
+            await _service.GetDashboardAsync();
+
+        return Ok(new
+        {
+            success = true,
+            data = dashboard
+        });
+    }
+    
+    
+    
 }

@@ -20,9 +20,12 @@ function AddressesPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
 
+  const userFullName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Customer'
+  const userPhone = user?.phoneNumber || user?.phone || ''
+
   async function load() {
     setIsLoading(true)
-    const data = await getMyAddresses(user.id)
+    const data = await getMyAddresses(user?.id)
     setAddresses(data)
     setIsLoading(false)
   }
@@ -31,14 +34,29 @@ function AddressesPage() {
 
   function openAdd() {
     setEditingId(null)
-    setForm({ ...EMPTY_FORM, contactName: `${user.firstName} ${user.lastName}`, phoneNumber: user.phoneNumber || '' })
+    setForm({
+      ...EMPTY_FORM,
+      contactName: userFullName,
+      phoneNumber: userPhone
+    })
     setErrors({})
     setShowModal(true)
   }
 
   function openEdit(addr) {
     setEditingId(addr.id)
-    setForm({ label: addr.label, contactName: addr.contactName, phoneNumber: addr.phoneNumber, addressLine1: addr.addressLine1, addressLine2: addr.addressLine2 || '', city: addr.city, state: addr.state, postalCode: addr.postalCode, landmark: addr.landmark || '', isDefault: addr.isDefault })
+    setForm({
+      label: addr.label || addr.addressTitle || 'Home',
+      contactName: addr.contactName || userFullName,
+      phoneNumber: addr.phoneNumber || userPhone,
+      addressLine1: addr.addressLine1 || addr.addressLine || '',
+      addressLine2: addr.addressLine2 || addr.area || '',
+      city: addr.city || '',
+      state: addr.state || 'Gujarat',
+      postalCode: addr.postalCode || addr.pincode || '',
+      landmark: addr.landmark || '',
+      isDefault: !!addr.isDefault
+    })
     setErrors({})
     setShowModal(true)
   }
@@ -98,34 +116,43 @@ function AddressesPage() {
         <EmptyState icon={MapPin} title="No addresses yet" message="Add a service location to get started." actionLabel="Add Address" onAction={openAdd} />
       ) : (
         <div className="cards-grid">
-          {addresses.map(addr => (
-            <div key={addr.id} className="data-card">
-              <div className="data-card__header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <MapPin size={18} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
-                  <div>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{addr.label}</h3>
-                    {addr.isDefault && <span className="badge badge--completed" style={{ fontSize: '0.68rem' }}>Default</span>}
+          {addresses.map(addr => {
+            const displayName = addr.contactName || userFullName
+            const displayPhone = addr.phoneNumber || userPhone
+            const displayAddress1 = addr.addressLine1 || addr.addressLine || ''
+            const displayAddress2 = addr.addressLine2 || addr.area || ''
+            const displayPincode = addr.postalCode || addr.pincode || ''
+
+            return (
+              <div key={addr.id} className="data-card">
+                <div className="data-card__header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MapPin size={18} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{addr.label || addr.addressTitle || 'Home'}</h3>
+                      {addr.isDefault && <span className="badge badge--completed" style={{ fontSize: '0.68rem' }}>Default</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {!addr.isDefault && (
+                      <button className="btn btn--ghost btn--sm" onClick={() => handleSetDefault(addr.id)} title="Set as default"><Star size={14} /></button>
+                    )}
+                    <button className="btn btn--ghost btn--sm" onClick={() => openEdit(addr)} title="Edit"><Edit size={14} /></button>
+                    <button className="btn btn--ghost btn--sm" style={{ color: 'var(--color-danger)' }} onClick={() => { setDeletingId(addr.id); setShowConfirm(true) }} title="Delete"><Trash2 size={14} /></button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {!addr.isDefault && (
-                    <button className="btn btn--ghost btn--sm" onClick={() => handleSetDefault(addr.id)} title="Set as default"><Star size={14} /></button>
-                  )}
-                  <button className="btn btn--ghost btn--sm" onClick={() => openEdit(addr)} title="Edit"><Edit size={14} /></button>
-                  <button className="btn btn--ghost btn--sm" style={{ color: 'var(--color-danger)' }} onClick={() => { setDeletingId(addr.id); setShowConfirm(true) }} title="Delete"><Trash2 size={14} /></button>
+                <div className="data-card__body">
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                    <strong style={{ color: 'var(--color-text)' }}>{displayName}</strong>
+                    {displayPhone ? ` · ${displayPhone}` : ''}<br />
+                    {displayAddress1}{displayAddress2 ? `, ${displayAddress2}` : ''}<br />
+                    {addr.city}, {addr.state} {displayPincode}
+                    {addr.landmark && <><br />Near: {addr.landmark}</>}
+                  </p>
                 </div>
               </div>
-              <div className="data-card__body">
-                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-                  {addr.contactName} · {addr.phoneNumber}<br />
-                  {addr.addressLine1}{addr.addressLine2 ? `, ${addr.addressLine2}` : ''}<br />
-                  {addr.city}, {addr.state} {addr.postalCode}
-                  {addr.landmark && <><br />Near: {addr.landmark}</>}
-                </p>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -155,7 +182,7 @@ function AddressesPage() {
             {errors.addressLine1 && <span className="form-error">{errors.addressLine1}</span>}
           </div>
           <div className="form-group">
-            <label className="form-label">Address Line 2</label>
+            <label className="form-label">Address Line 2 (Area/Locality)</label>
             <input className="form-input" value={form.addressLine2} onChange={e => setForm({ ...form, addressLine2: e.target.value })} />
           </div>
           <div className="form-row">
