@@ -1,5 +1,6 @@
 using FieldServiceManagement.API.DTOs.ServiceRequests;
 using FieldServiceManagement.API.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -12,17 +13,22 @@ namespace FieldServiceManagement.API.Controllers;
 public class ServiceRequestsController : ControllerBase
 {
     private readonly ServiceRequestService _service;
+    private readonly IValidator<CreateServiceRequestDto> _createValidator;
+    private readonly IValidator<UpdateServiceRequestDto> _updateValidator;
+    private readonly IValidator<AssignTechnicianDto> _assignTechnicianValidator;
 
-    public ServiceRequestsController(ServiceRequestService service)
+    public ServiceRequestsController(
+        ServiceRequestService service,
+        IValidator<CreateServiceRequestDto> createValidator,
+        IValidator<UpdateServiceRequestDto> updateValidator,
+        IValidator<AssignTechnicianDto> assignTechnicianValidator)
     {
         _service = service;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _assignTechnicianValidator = assignTechnicianValidator;
     }
 
-    
-    // OWNER / MANAGER THINGS
-
-
-    // Get all service requests
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -37,9 +43,7 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Get service request by ID
-    [Authorize(Roles = "Owner,Manager")]
+    [Authorize(Roles = "Owner,Manager,Customer,Technician")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -61,8 +65,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Get service requests by status
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("status/{status}")]
     public async Task<IActionResult> GetByStatus(string status)
@@ -77,8 +79,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Search service requests
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("search")]
     public async Task<IActionResult> Search(string name)
@@ -102,16 +102,22 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Assign technician
     [Authorize(Roles = "Owner,Manager")]
     [HttpPatch("{id:int}/assign")]
     public async Task<IActionResult> AssignTechnician(
         int id,
         AssignTechnicianDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _assignTechnicianValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var result = await _service.AssignTechnicianAsync(id, dto);
 
@@ -131,11 +137,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    
-    // TECHNICIAN THINGS
-
-    // Get all assigned jobs
     [Authorize(Roles = "Technician")]
     [HttpGet("technician/my")]
     public async Task<IActionResult> GetMyTechnicianRequests()
@@ -155,8 +156,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Start job
     [Authorize(Roles = "Technician")]
     [HttpPatch("{id:int}/start")]
     public async Task<IActionResult> StartRequest(int id)
@@ -186,8 +185,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Complete job
     [Authorize(Roles = "Technician")]
     [HttpPatch("{id:int}/complete")]
     public async Task<IActionResult> CompleteRequest(int id)
@@ -217,11 +214,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    
-    // CUSTOMER THINGS
-
-    // Get customer's own requests
     [Authorize(Roles = "Customer")]
     [HttpGet("my")]
     public async Task<IActionResult> GetMyRequests()
@@ -241,8 +233,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Get customer's own request by ID
     [Authorize(Roles = "Customer")]
     [HttpGet("my/{id:int}")]
     public async Task<IActionResult> GetMyRequestById(int id)
@@ -272,15 +262,21 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Create service request
     [Authorize(Roles = "Customer")]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateServiceRequestDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _createValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var customerId = int.Parse(
             User.FindFirst(ClaimTypes.NameIdentifier)!.Value
@@ -307,16 +303,22 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Update service request
     [Authorize(Roles = "Customer")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateServiceRequestDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _updateValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var customerId = int.Parse(
             User.FindFirst(ClaimTypes.NameIdentifier)!.Value
@@ -344,8 +346,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Cancel service request
     [Authorize(Roles = "Customer")]
     [HttpPatch("{id:int}/cancel")]
     public async Task<IActionResult> Cancel(int id)
@@ -375,11 +375,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    
-    // DASHBOARDS
-
-    // Customer dashboard
     [Authorize(Roles = "Customer")]
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboard()
@@ -398,8 +393,6 @@ public class ServiceRequestsController : ControllerBase
         });
     }
 
-
-    // Owner / Manager dashboard
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("management-dashboard")]
     public async Task<IActionResult> GetManagementDashboard()

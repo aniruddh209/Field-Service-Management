@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace FieldServiceManagement.API.Migrations
 {
-    /// <inheritdoc />
+
     public partial class AddRemainingTables : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<string>(
@@ -273,7 +273,7 @@ namespace FieldServiceManagement.API.Migrations
                 });
         }
 
-        /// <inheritdoc />
+
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

@@ -1,38 +1,26 @@
 import api from "../api/api";
-import { serviceRequestsData } from "../data/serviceRequestsData";
+import { getAssignedServiceRequests } from "./serviceRequestService";
 
-export async function getTechnicianSchedule(technicianId) {
-  try {
-    const response = await api.get(`/Technicians/${technicianId}/schedule`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local schedule data:", err.message);
-  }
+export async function getTechnicianSchedule() {
+  const jobs = await getAssignedServiceRequests().catch(() => []);
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  const today = jobs.filter(j => {
+    if (!j.preferredDate) return true;
+    return j.preferredDate.startsWith(todayStr) || ['Assigned', 'InProgress'].includes(j.status);
+  });
 
-  const techRequests = serviceRequestsData.filter(r => 
-    r.assignedTechnicianId === Number(technicianId)
-  );
-
-  const today = techRequests.filter(r => r.status === 'InProgress' || r.status === 'Assigned' || r.status === 'Accepted' || r.status === 'OnTheWay');
-  const upcoming = techRequests.filter(r => r.status === 'Pending' || r.status === 'UnderReview');
-
-  return { today, upcoming };
+  const upcoming = jobs.filter(j => !today.includes(j));
+  
+  return { today, upcoming, all: jobs };
 }
 
 export async function getFullSchedule() {
-  try {
-    const response = await api.get("/Technicians/schedule");
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local schedule data:", err.message);
-  }
-
-  const today = serviceRequestsData.filter(r => 
-    ['InProgress', 'Assigned', 'Accepted', 'OnTheWay'].includes(r.status)
-  );
-  const upcoming = serviceRequestsData.filter(r => 
-    ['Pending', 'UnderReview'].includes(r.status)
-  );
-
-  return { today, upcoming };
+  const response = await api.get("/ServiceRequests");
+  const requests = response.data?.data || response.data || [];
+  
+  const today = requests.filter(r => ['Assigned', 'InProgress'].includes(r.status));
+  const upcoming = requests.filter(r => r.status === 'Pending');
+  
+  return { today, upcoming, all: requests };
 }

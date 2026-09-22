@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FieldServiceManagement.API.Models;
 
@@ -7,37 +8,51 @@ public class Invoice
     [Key]
     public int Id { get; set; }
 
-    public string InvoiceNumber { get; set; } = string.Empty;
-
     public int ServiceRequestId { get; set; }
+
+    [ForeignKey(nameof(ServiceRequestId))]
+    public ServiceRequest? ServiceRequest { get; set; }
+
+    public int WorkReportId { get; set; }
+
+    [ForeignKey(nameof(WorkReportId))]
+    public WorkReport? WorkReport { get; set; }
 
     public int CustomerId { get; set; }
 
-    public int ManagerId { get; set; }
+    [ForeignKey(nameof(CustomerId))]
+    public User? Customer { get; set; }
 
-    public decimal ServiceCharge { get; set; }
+    public string InvoiceNumber { get; set; } = string.Empty;
 
+    [Column(TypeName = "decimal(18,2)")]
     public decimal LabourCharge { get; set; }
 
-    public decimal PartsCharge { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal PartsAmount { get; set; }
 
-    public decimal GST { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal SubTotal { get; set; }
 
-    public decimal Discount { get; set; }
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TaxAmount { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
     public decimal TotalAmount { get; set; }
 
-    public string PaymentStatus { get; set; } = "Draft";
+    public string Status { get; set; } = "Unpaid";
 
-    public string PaymentMethod { get; set; } = string.Empty;
+    public DateTime? PaidAt { get; set; }
 
-    public DateTime IssueDate { get; set; } = DateTime.Now;
+    public int GeneratedByUserId { get; set; }
 
-    public DateTime DueDate { get; set; }
+    [ForeignKey(nameof(GeneratedByUserId))]
+    public User? GeneratedByUser { get; set; }
 
-    public DateTime? PaidDate { get; set; }
-
-    public int WarrantyDays { get; set; }
+    public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
 
     public string? Notes { get; set; }
+
+    public ICollection<InvoiceItem> Items { get; set; }
+        = new List<InvoiceItem>();
 }

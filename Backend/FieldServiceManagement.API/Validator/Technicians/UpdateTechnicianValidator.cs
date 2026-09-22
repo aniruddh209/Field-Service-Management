@@ -1,7 +1,7 @@
 using FieldServiceManagement.API.DTOs.Technicians;
 using FluentValidation;
 
-namespace FieldServiceManagement.API.Validator;
+namespace FieldServiceManagement.API.Validators.Technicians;
 
 public class UpdateTechnicianValidator
     : AbstractValidator<UpdateTechnicianDto>
@@ -20,10 +20,12 @@ public class UpdateTechnicianValidator
 
         RuleFor(x => x.CurrentLocation)
             .MaximumLength(100)
+            .When(x => !string.IsNullOrWhiteSpace(x.CurrentLocation))
             .WithMessage("Current location cannot exceed 100 characters.");
 
         RuleFor(x => x.Notes)
             .MaximumLength(500)
+            .When(x => !string.IsNullOrWhiteSpace(x.Notes))
             .WithMessage("Notes cannot exceed 500 characters.");
     }
 }

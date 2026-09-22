@@ -1,5 +1,6 @@
 using FieldServiceManagement.API.DTOs.Inventory;
 using FieldServiceManagement.API.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -12,16 +13,21 @@ namespace FieldServiceManagement.API.Controllers;
 public class InventoryController : ControllerBase
 {
     private readonly InventoryService _service;
+    private readonly IValidator<CreateInventoryItemDto> _createValidator;
+    private readonly IValidator<UpdateInventoryItemDto> _updateValidator;
+    private readonly IValidator<AdjustStockDto> _adjustStockValidator;
 
-    public InventoryController(InventoryService service)
+    public InventoryController(
+        InventoryService service,
+        IValidator<CreateInventoryItemDto> createValidator,
+        IValidator<UpdateInventoryItemDto> updateValidator,
+        IValidator<AdjustStockDto> adjustStockValidator)
     {
         _service = service;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _adjustStockValidator = adjustStockValidator;
     }
-
-
-    // =========================================================
-    // GET ALL INVENTORY ITEMS
-    // =========================================================
 
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet]
@@ -36,11 +42,6 @@ public class InventoryController : ControllerBase
             data = items
         });
     }
-
-
-    // =========================================================
-    // GET INVENTORY ITEM BY ID
-    // =========================================================
 
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("{id:int}")]
@@ -63,11 +64,6 @@ public class InventoryController : ControllerBase
             data = item
         });
     }
-
-
-    // =========================================================
-    // SEARCH INVENTORY
-    // =========================================================
 
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("search")]
@@ -93,11 +89,6 @@ public class InventoryController : ControllerBase
         });
     }
 
-
-    // =========================================================
-    // GET LOW-STOCK ITEMS
-    // =========================================================
-
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("low-stock")]
     public async Task<IActionResult> GetLowStock()
@@ -112,30 +103,30 @@ public class InventoryController : ControllerBase
         });
     }
 
-
-    // =========================================================
-    // CREATE INVENTORY ITEM
-    // =========================================================
-
     [Authorize(Roles = "Owner,Manager")]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateInventoryItemDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
+        var validationResult = await _createValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var userId = int.Parse(
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)!
         );
 
-
         var result = await _service.CreateAsync(
             userId,
             dto);
-
 
         if (!result)
         {
@@ -148,7 +139,6 @@ public class InventoryController : ControllerBase
             });
         }
 
-
         return StatusCode(201, new
         {
             success = true,
@@ -157,26 +147,27 @@ public class InventoryController : ControllerBase
         });
     }
 
-
-    // =========================================================
-    // UPDATE INVENTORY ITEM DETAILS
-    // =========================================================
-
     [Authorize(Roles = "Owner,Manager")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateInventoryItemDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
+        var validationResult = await _updateValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var result =
             await _service.UpdateAsync(
                 id,
                 dto);
-
 
         if (!result)
         {
@@ -188,7 +179,6 @@ public class InventoryController : ControllerBase
             });
         }
 
-
         return Ok(new
         {
             success = true,
@@ -197,33 +187,33 @@ public class InventoryController : ControllerBase
         });
     }
 
-
-    // =========================================================
-    // ADJUST STOCK
-    // =========================================================
-
     [Authorize(Roles = "Owner,Manager")]
     [HttpPatch("{id:int}/stock")]
     public async Task<IActionResult> AdjustStock(
         int id,
         [FromBody] AdjustStockDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
+        var validationResult = await _adjustStockValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var userId = int.Parse(
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)!
         );
 
-
         var result =
             await _service.AdjustStockAsync(
                 id,
                 userId,
                 dto);
-
 
         if (!result)
         {
@@ -237,7 +227,6 @@ public class InventoryController : ControllerBase
             });
         }
 
-
         return Ok(new
         {
             success = true,
@@ -246,11 +235,6 @@ public class InventoryController : ControllerBase
         });
     }
 
-
-    // =========================================================
-    // DEACTIVATE INVENTORY ITEM
-    // =========================================================
-
     [Authorize(Roles = "Owner,Manager")]
     [HttpPatch("{id:int}/deactivate")]
     public async Task<IActionResult> Deactivate(
@@ -258,7 +242,6 @@ public class InventoryController : ControllerBase
     {
         var result =
             await _service.DeactivateAsync(id);
-
 
         if (!result)
         {
@@ -269,7 +252,6 @@ public class InventoryController : ControllerBase
                     "Unable to deactivate inventory item."
             });
         }
-
 
         return Ok(new
         {

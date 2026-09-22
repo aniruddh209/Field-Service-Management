@@ -1,44 +1,63 @@
+// ====================================
+// Notification Service
+// ====================================
+// Endpoints match backend NotificationsController exactly.
+// GET /api/Notifications/my
+// GET /api/Notifications/{id}
+// GET /api/Notifications/count
+// PATCH /api/Notifications/{id}/read
+// PATCH /api/Notifications/read-all
+// NO mock data fallbacks.
+// ====================================
+
 import api from "../api/api";
-import { notificationsData as initialNotifications } from "../data/notificationsData";
 
-let notificationsList = [...initialNotifications];
+export async function getMyNotifications() {
+  const response = await api.get("/Notifications/my");
+  return response.data?.data || response.data || [];
+}
 
-export async function getNotificationsForUser(userId) {
-  try {
-    const response = await api.get(`/Notifications?userId=${userId}`);
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local notifications store:", err.message);
-  }
-  return notificationsList.filter(n => n.userId === Number(userId));
+export const getNotificationsForUser = getMyNotifications;
+
+export async function getNotificationById(id) {
+  const response = await api.get(`/Notifications/${id}`);
+  return response.data?.data || response.data;
+}
+
+export async function getNotificationCount() {
+  const response = await api.get("/Notifications/count");
+  return response.data?.data || response.data;
 }
 
 export async function markAsRead(id) {
-  try {
-    const response = await api.put(`/Notifications/${id}/read`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local notifications store:", err.message);
-  }
-
-  notificationsList = notificationsList.map(n => 
-    n.id === Number(id) ? { ...n, isRead: true } : n
-  );
-  return notificationsList.find(n => n.id === Number(id));
+  const response = await api.patch(`/Notifications/${id}/read`);
+  return response.data;
 }
 
-export async function markAllAsRead(userId) {
-  try {
-    const response = await api.put(`/Notifications/mark-all-read?userId=${userId}`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local notifications store:", err.message);
-  }
-
-  notificationsList = notificationsList.map(n => 
-    n.userId === Number(userId) ? { ...n, isRead: true } : n
-  );
-  return notificationsList.filter(n => n.userId === Number(userId));
+export async function markAllAsRead() {
+  const response = await api.patch("/Notifications/read-all");
+  return response.data;
 }
+
+export async function clearNotification(id) {
+  const response = await api.delete(`/Notifications/${id}`);
+  return response.data;
+}
+
+export async function clearAllNotifications() {
+  const response = await api.delete("/Notifications/clear-all");
+  return response.data;
+}
+
+const notificationService = {
+  getMyNotifications,
+  getNotificationsForUser,
+  getNotificationById,
+  getNotificationCount,
+  markAsRead,
+  markAllAsRead,
+  clearNotification,
+  clearAllNotifications
+};
+
+export default notificationService;

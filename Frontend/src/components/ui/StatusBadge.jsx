@@ -2,6 +2,10 @@ import React from 'react';
 
 const statusMap = {
   Pending: { label: 'Pending', className: 'badge--pending' },
+  Unpaid: { label: 'Unpaid', className: 'badge--pending' },
+  Draft: { label: 'Draft', className: 'badge--under-review' },
+  Sent: { label: 'Sent', className: 'badge--assigned' },
+  Overdue: { label: 'Overdue', className: 'badge--cancelled' },
   UnderReview: { label: 'Under Review', className: 'badge--under-review' },
   Assigned: { label: 'Assigned', className: 'badge--assigned' },
   Accepted: { label: 'Accepted', className: 'badge--accepted' },

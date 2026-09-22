@@ -1,198 +1,141 @@
 import api from "../api/api";
-import { serviceRequestsData as initialRequests } from "../data/serviceRequestsData";
-import { statusHistoryData as initialStatusHistory } from "../data/statusHistoryData";
-
-let requestsList = [...initialRequests];
-let statusHistoryList = [...initialStatusHistory];
 
 export async function getAllServiceRequests() {
-  try {
-    const response = await api.get("/ServiceRequests");
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-  return requestsList;
+  const response = await api.get("/ServiceRequests");
+  return response.data?.data || response.data || [];
 }
 
-export async function getMyServiceRequests(customerId = 1) {
-  try {
-    const response = await api.get(`/ServiceRequests/customer/${customerId}`);
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-  return requestsList.filter(r => r.customerId === Number(customerId));
+export async function getMyServiceRequests() {
+  const response = await api.get("/ServiceRequests/my");
+  return response.data?.data || response.data || [];
 }
 
-export async function getRequestsByTechnician(technicianId) {
-  try {
-    const response = await api.get(`/ServiceRequests/technician/${technicianId}`);
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-  return requestsList.filter(r => r.assignedTechnicianId === Number(technicianId));
+export const getCustomerRequests = getMyServiceRequests;
+
+export async function getAssignedServiceRequests() {
+  const response = await api.get("/ServiceRequests/technician/my");
+  return response.data?.data || response.data || [];
+}
+
+export const getRequestsByTechnician = getAssignedServiceRequests;
+
+export async function getServiceRequestsByStatus(status) {
+  const response = await api.get(`/ServiceRequests/status/${status}`);
+  return response.data?.data || response.data || [];
+}
+
+export async function searchServiceRequests(name) {
+  const response = await api.get(`/ServiceRequests/search?name=${encodeURIComponent(name)}`);
+  return response.data?.data || response.data || [];
 }
 
 export async function getServiceRequestById(id) {
-  try {
-    const response = await api.get(`/ServiceRequests/${id}`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  const req = requestsList.find(r => r.id === Number(id) || String(r.id) === String(id));
-  return req || null;
+  const response = await api.get(`/ServiceRequests/${id}`);
+  return response.data?.data || response.data;
 }
 
-export async function getStatusHistory(requestId) {
-  try {
-    const response = await api.get(`/ServiceRequests/${requestId}/history`);
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local status history store:", err.message);
-  }
-
-  return statusHistoryList.filter(h => h.serviceRequestId === Number(requestId));
+export async function createServiceRequest(dto) {
+  const response = await api.post("/ServiceRequests", dto);
+  return response.data?.data || response.data;
 }
 
-export async function createServiceRequest(requestData) {
-  try {
-    const response = await api.post("/ServiceRequests", requestData);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  const newId = requestsList.length ? Math.max(...requestsList.map(r => r.id)) + 1 : 1001;
-  const newRequest = {
-    id: newId,
-    requestNumber: `SR-${newId}`,
-    customerId: requestData.customerId || 1,
-    status: 'Pending',
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    assignedTechnicianId: null,
-    assignedTechnicianName: null,
-    ...requestData
-  };
-
-  requestsList.unshift(newRequest);
-  return newRequest;
+export async function updateServiceRequest(id, dto) {
+  const response = await api.put(`/ServiceRequests/${id}`, dto);
+  return response.data?.data || response.data;
 }
 
-export async function startReview(requestId) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/start-review`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'UnderReview' } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
+export async function assignTechnician(id, technicianId) {
+  const payload = typeof technicianId === 'object' ? technicianId : { technicianId: Number(technicianId) };
+  const response = await api.patch(`/ServiceRequests/${id}/assign`, payload);
+  return response.data?.data || response.data;
 }
 
-export async function assignTechnician(requestId, technicianId, technicianName) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/assign`, { technicianId, technicianName });
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
+export async function startServiceRequest(id) {
+  const response = await api.patch(`/ServiceRequests/${id}/start`);
+  return response.data?.data || response.data;
+}
 
-  requestsList = requestsList.map(r => {
-    if (r.id === Number(requestId)) {
-      return {
-        ...r,
-        assignedTechnicianId: Number(technicianId),
-        assignedTechnicianName: technicianName || `Tech #${technicianId}`,
-        status: 'Assigned'
-      };
-    }
-    return r;
-  });
-  return requestsList.find(r => r.id === Number(requestId));
+export async function completeServiceRequest(id) {
+  const response = await api.patch(`/ServiceRequests/${id}/complete`);
+  return response.data?.data || response.data;
+}
+
+export async function cancelServiceRequest(id) {
+  const response = await api.patch(`/ServiceRequests/${id}/cancel`);
+  return response.data?.data || response.data;
+}
+
+export async function getCustomerDashboard() {
+  const response = await api.get("/ServiceRequests/dashboard");
+  return response.data?.data || response.data;
+}
+
+export async function getManagementDashboard() {
+  const response = await api.get("/ServiceRequests/management-dashboard");
+  return response.data?.data || response.data;
+}
+
+export async function getStatusHistory(id) {
+  const request = await getServiceRequestById(id);
+  return request?.statusHistory || [
+    { status: request?.status || "Pending", date: request?.createdAt, updatedBy: "System", notes: "Status updated" }
+  ];
+}
+
+export async function startReview(id) {
+  return startServiceRequest(id);
+}
+
+export async function closeRequest(id) {
+  return cancelServiceRequest(id);
 }
 
 export async function approveWork(requestId) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/approve-work`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'Completed', completedAt: new Date().toISOString() } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
+  const response = await api.patch(`/WorkReports/${requestId}/approve`);
+  return response.data?.data || response.data;
 }
 
-export async function returnForCorrection(requestId, notes) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/return-correction`, { notes });
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'CorrectionRequired', correctionNotes: notes } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
+export async function returnForCorrection(requestId, reason) {
+  const payload = typeof reason === 'object' ? reason : { correctionReason: reason };
+  const response = await api.post(`/WorkReports/${requestId}/request-correction`, payload);
+  return response.data?.data || response.data;
 }
 
 export async function markAsInvoiced(requestId) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/mark-invoiced`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'Invoiced' } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
+  return true;
 }
 
-export async function markAsPaid(requestId) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/mark-paid`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
-
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'PaymentDone' } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
+export async function markAsPaid(invoiceId) {
+  const response = await api.patch(`/Invoices/${invoiceId}/status`, JSON.stringify("Paid"), {
+    headers: { "Content-Type": "application/json" }
+  });
+  return response.data?.data || response.data;
 }
 
-export async function closeRequest(requestId) {
-  try {
-    const response = await api.put(`/ServiceRequests/${requestId}/close`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local service requests store:", err.message);
-  }
+const serviceRequestService = {
+  getAllServiceRequests,
+  getMyServiceRequests,
+  getCustomerRequests,
+  getAssignedServiceRequests,
+  getRequestsByTechnician,
+  getServiceRequestsByStatus,
+  searchServiceRequests,
+  getServiceRequestById,
+  createServiceRequest,
+  updateServiceRequest,
+  assignTechnician,
+  startServiceRequest,
+  completeServiceRequest,
+  cancelServiceRequest,
+  getCustomerDashboard,
+  getManagementDashboard,
+  getStatusHistory,
+  startReview,
+  closeRequest,
+  approveWork,
+  returnForCorrection,
+  markAsInvoiced,
+  markAsPaid
+};
 
-  requestsList = requestsList.map(r => 
-    r.id === Number(requestId) ? { ...r, status: 'Closed' } : r
-  );
-  return requestsList.find(r => r.id === Number(requestId));
-}
+export default serviceRequestService;

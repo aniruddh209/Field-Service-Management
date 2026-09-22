@@ -1,10 +1,14 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace FieldServiceManagement.API.DTOs.WorkReports;
 
 public class RequestCorrectionDto
 {
-    [Required]
-    [StringLength(1000)]
-    public string CorrectionReason { get; set; } = string.Empty;
+    private string _correctionReason = string.Empty;
+
+    public string CorrectionReason
+    {
+        get => string.IsNullOrWhiteSpace(_correctionReason) ? Feedback : _correctionReason;
+        set => _correctionReason = value;
+    }
+
+    public string Feedback { get; set; } = string.Empty;
 }

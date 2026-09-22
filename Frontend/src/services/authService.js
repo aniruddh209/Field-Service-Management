@@ -1,7 +1,8 @@
 import api from "../api/api";
 
 const authService = {
-    // LOGIN — Strictly connects to ASP.NET Core Backend API
+    // LOGIN — POST /api/Auth/login
+    // Backend response: { success, message, data: { token, expiresAt, user: UserDto } }
     async login(credentials, password, expectedRole) {
         let payload;
         if (typeof credentials === "object" && credentials !== null) {
@@ -20,23 +21,17 @@ const authService = {
         try {
             const response = await api.post("/Auth/login", payload);
             const result = response.data;
-            const authData = result?.data || result;
-            const user = authData?.user;
+            // result = { success: true, message: "...", data: { token, expiresAt, user } }
 
-            // Enforce Portal Role Validation
-            if (user && expectedRole) {
-                const userRole = user.role;
-                const isManagementMatch = (expectedRole === "Owner" || expectedRole === "Manager") &&
-                                          (userRole === "Owner" || userRole === "Manager");
-
-                if (userRole !== expectedRole && !isManagementMatch) {
-                    this.logout();
-                    return {
-                        success: false,
-                        message: `Access denied: Account '${payload.email}' is registered as '${userRole}', but you selected the '${expectedRole}' portal. Please select the '${userRole}' portal tab to sign in.`
-                    };
-                }
+            if (!result?.success) {
+                return {
+                    success: false,
+                    message: result?.message || "Login failed."
+                };
             }
+
+            const authData = result.data;
+            const user = authData?.user;
 
             if (authData?.token) {
                 localStorage.setItem("authToken", authData.token);
@@ -44,11 +39,15 @@ const authService = {
             if (authData?.expiresAt) {
                 localStorage.setItem("authExpiresAt", authData.expiresAt);
             }
-            if (authData?.user) {
-                localStorage.setItem("authUser", JSON.stringify(authData.user));
+            if (user) {
+                localStorage.setItem("authUser", JSON.stringify(user));
             }
 
-            return result;
+            return {
+                success: true,
+                data: authData,
+                user: user
+            };
         } catch (err) {
             console.error("Backend login error:", err);
 
@@ -62,7 +61,7 @@ const authService = {
             if (err.code === "ERR_NETWORK" || !err.response) {
                 return {
                     success: false,
-                    message: "Unable to connect to ASP.NET Core backend server at http://localhost:5179/api. Please ensure the backend is running via 'dotnet run'."
+                    message: "Unable to connect to backend server. Please ensure the backend is running."
                 };
             }
 
@@ -73,7 +72,9 @@ const authService = {
         }
     },
 
-    // REGISTER — Strictly connects to ASP.NET Core Backend API
+    // REGISTER — POST /api/Auth/register
+    // Backend expects: { firstName, lastName, email, password, phoneNumber, role }
+    // Backend response: { success, message }
     async register(userData) {
         try {
             const response = await api.post("/Auth/register", userData);
@@ -91,7 +92,7 @@ const authService = {
             if (err.code === "ERR_NETWORK" || !err.response) {
                 return {
                     success: false,
-                    message: "Unable to connect to ASP.NET Core backend server at http://localhost:5179/api. Please ensure the backend is running via 'dotnet run'."
+                    message: "Unable to connect to backend server. Please ensure the backend is running."
                 };
             }
 

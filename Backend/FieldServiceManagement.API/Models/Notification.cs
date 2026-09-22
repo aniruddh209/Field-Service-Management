@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FieldServiceManagement.API.Models;
 
@@ -9,13 +10,22 @@ public class Notification
 
     public int UserId { get; set; }
 
+    [ForeignKey(nameof(UserId))]
+    public User? User { get; set; }
+
     public string Title { get; set; } = string.Empty;
 
     public string Message { get; set; } = string.Empty;
 
-    public string Type { get; set; } = string.Empty;
+    public string Type { get; set; } = "System";
 
-    public bool IsRead { get; set; }
+    public string? RelatedEntityType { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public int? RelatedEntityId { get; set; }
+
+    public bool IsRead { get; set; } = false;
+
+    public DateTime? ReadAt { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

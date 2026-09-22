@@ -1,64 +1,61 @@
 import api from "../api/api";
-import { inventoryData as initialInventory } from "../data/inventoryData";
 
-let inventoryList = [...initialInventory];
-
-export async function getInventoryItems() {
-  try {
-    const response = await api.get("/Inventory");
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local inventory store:", err.message);
-  }
-  return inventoryList;
+export async function getAllInventoryItems() {
+  const response = await api.get("/Inventory");
+  return response.data?.data || response.data || [];
 }
 
-export async function createInventoryItem(itemData) {
-  try {
-    const response = await api.post("/Inventory", itemData);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local inventory store:", err.message);
-  }
+export const getInventoryItems = getAllInventoryItems;
 
-  const newItem = {
-    id: inventoryList.length ? Math.max(...inventoryList.map(i => i.id)) + 1 : 1,
-    sku: itemData.sku || `PART-GEN-${String(inventoryList.length + 1).padStart(3, '0')}`,
-    isActive: true,
-    ...itemData
-  };
-  inventoryList.push(newItem);
-  return newItem;
+export async function getInventoryItemById(id) {
+  const response = await api.get(`/Inventory/${id}`);
+  return response.data?.data || response.data;
 }
 
-export async function updateInventoryItem(id, itemData) {
-  try {
-    const response = await api.put(`/Inventory/${id}`, itemData);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local inventory store:", err.message);
-  }
-
-  inventoryList = inventoryList.map(i => i.id === Number(id) ? { ...i, ...itemData } : i);
-  return inventoryList.find(i => i.id === Number(id));
+export async function searchInventoryItems(term) {
+  const response = await api.get(`/Inventory/search?name=${encodeURIComponent(term)}`);
+  return response.data?.data || response.data || [];
 }
 
-export async function adjustStock(id, amount, reason = "Manual Adjustment") {
-  try {
-    const response = await api.post(`/Inventory/${id}/adjust`, { amount, reason });
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local inventory store:", err.message);
-  }
-
-  inventoryList = inventoryList.map(i => {
-    if (i.id === Number(id)) {
-      const newQty = Math.max(0, (i.quantityInStock || 0) + Number(amount));
-      return { ...i, quantityInStock: newQty };
-    }
-    return i;
-  });
-  return inventoryList.find(i => i.id === Number(id));
+export async function getLowStockItems() {
+  const response = await api.get("/Inventory/low-stock");
+  return response.data?.data || response.data || [];
 }
+
+export async function createInventoryItem(dto) {
+  const response = await api.post("/Inventory", dto);
+  return response.data?.data || response.data;
+}
+
+export async function updateInventoryItem(id, dto) {
+  const response = await api.put(`/Inventory/${id}`, dto);
+  return response.data?.data || response.data;
+}
+
+export async function adjustStock(id, payloadOrQuantity, reason = "Stock level adjustment") {
+  const payload = typeof payloadOrQuantity === 'object'
+    ? payloadOrQuantity
+    : { quantityChange: Number(payloadOrQuantity), reason };
+  const response = await api.patch(`/Inventory/${id}/stock`, payload);
+  return response.data?.data || response.data;
+}
+
+export async function deactivateInventoryItem(id) {
+  const response = await api.patch(`/Inventory/${id}/deactivate`);
+  return response.data?.data || response.data;
+}
+
+const inventoryService = {
+  getAllInventoryItems,
+  getInventoryItems,
+  getInventoryItemById,
+  searchInventoryItems,
+  getLowStockItems,
+  createInventoryItem,
+  updateInventoryItem,
+  adjustStock,
+  deactivateInventoryItem
+};
+
+export default inventoryService;
+

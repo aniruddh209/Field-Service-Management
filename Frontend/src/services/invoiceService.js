@@ -1,90 +1,100 @@
 import api from "../api/api";
-import { invoicesData as initialInvoices } from "../data/invoicesData";
-
-let invoicesList = [...initialInvoices];
-
-export async function getCustomerInvoices(customerId = 1) {
-  try {
-    const response = await api.get(`/Invoices?customerId=${customerId}`);
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local invoices store:", err.message);
-  }
-  return invoicesList.filter(i => i.customerId === Number(customerId));
-}
 
 export async function getAllInvoices() {
   try {
     const response = await api.get("/Invoices");
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
+    const data = response.data?.data || response.data;
+    return Array.isArray(data) ? data : [];
   } catch (err) {
-    console.warn("Backend API unavailable, using local invoices store:", err.message);
+    console.error("Error fetching all invoices:", err);
+    return [];
   }
-  return invoicesList;
 }
+
+export async function getMyInvoices() {
+  try {
+    const response = await api.get("/Invoices/my");
+    const data = response.data?.data || response.data;
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.error("Error fetching my invoices:", err);
+    return [];
+  }
+}
+
+export const getCustomerInvoices = getMyInvoices;
 
 export async function getInvoiceById(id) {
   try {
     const response = await api.get(`/Invoices/${id}`);
-    if (response.data) return response.data;
+    return response.data?.data || response.data || null;
   } catch (err) {
-    console.warn("Backend API unavailable, using local invoices store:", err.message);
+    console.error(`Error fetching invoice ${id}:`, err);
+    return null;
   }
-
-  const invoice = invoicesList.find(i => 
-    i.id === Number(id) || i.invoiceNumber === String(id) || String(i.id) === String(id)
-  );
-  return invoice || null;
 }
 
-export async function createInvoice(invoiceData) {
+export async function getInvoiceByRequestId(requestId) {
   try {
-    const response = await api.post("/Invoices", invoiceData);
-    if (response.data) return response.data;
+    const response = await api.get(`/Invoices/request/${requestId}`);
+    return response.data?.data || response.data || null;
   } catch (err) {
-    console.warn("Backend API unavailable, using local invoices store:", err.message);
+    console.error(`Error fetching invoice for request ${requestId}:`, err);
+    return null;
   }
+}
 
-  const newId = invoicesList.length ? Math.max(...invoicesList.map(i => i.id)) + 1 : 101;
-  const newInvoice = {
-    id: newId,
-    invoiceNumber: `INV-2026-${newId}`,
-    status: 'Pending',
-    issuedAt: new Date().toISOString().split('T')[0],
-    paidAt: null,
-    ...invoiceData
+export async function generateInvoice(dto) {
+  const payload = {
+    serviceRequestId: Number(dto.serviceRequestId),
+    serviceCharge: dto.serviceCharge !== undefined && dto.serviceCharge !== null ? Number(dto.serviceCharge) : undefined,
+    labourCharge: dto.labourCharge !== undefined && dto.labourCharge !== null ? Number(dto.labourCharge) : undefined,
+    taxAmount: dto.taxAmount !== undefined && dto.taxAmount !== null ? Number(dto.taxAmount) : 0,
+    notes: dto.notes || null
   };
-  invoicesList.unshift(newInvoice);
-  return newInvoice;
+  const response = await api.post("/Invoices/generate", payload);
+  return response.data?.data || response.data;
 }
 
-export async function payInvoice(id, paymentDetails = {}) {
-  try {
-    const response = await api.post(`/Invoices/${id}/pay`, paymentDetails);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local invoices store:", err.message);
-  }
+export const createInvoice = generateInvoice;
 
-  invoicesList = invoicesList.map(i => {
-    if (i.id === Number(id) || String(i.id) === String(id)) {
-      return {
-        ...i,
-        status: 'Paid',
-        paidAt: new Date().toISOString().split('T')[0],
-        paymentMethod: paymentDetails.method || 'Online'
-      };
-    }
-    return i;
+export async function updateInvoiceStatus(id, newStatus) {
+  const response = await api.patch(`/Invoices/${id}/status`, JSON.stringify(newStatus), {
+    headers: { "Content-Type": "application/json" }
   });
-  return invoicesList.find(i => i.id === Number(id) || String(i.id) === String(id));
+  return response.data?.data || response.data;
 }
 
-export async function downloadInvoicePdf(id) {
-  console.log(`Downloading PDF for invoice ${id}`);
-  return { success: true, message: `Invoice #${id} download triggered.` };
+export async function payInvoice(id) {
+  return updateInvoiceStatus(id, "Paid");
 }
+
+export async function checkInvoiceExists(requestId) {
+  try {
+    const response = await api.get(`/Invoices/exists/service-request/${requestId}`);
+    return response.data?.exists ?? response.data?.data ?? false;
+  } catch (err) {
+    return false;
+  }
+}
+
+export function downloadInvoicePdf(id, invoiceNumber) {
+  window.print();
+}
+
+const invoiceService = {
+  getAllInvoices,
+  getMyInvoices,
+  getCustomerInvoices,
+  getInvoiceById,
+  getInvoiceByRequestId,
+  generateInvoice,
+  createInvoice,
+  updateInvoiceStatus,
+  payInvoice,
+  checkInvoiceExists,
+  downloadInvoicePdf
+};
+
+export default invoiceService;
+

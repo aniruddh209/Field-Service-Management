@@ -191,10 +191,10 @@ function CompletedWorkPage() {
                             + Invoice
                           </button>
                         )}
-                        {isInvoiced && r.invoiceId && (
+                        {isInvoiced && (
                           <button 
                             className="btn btn--ghost btn--sm"
-                            onClick={() => navigate(`/management/invoices/${r.invoiceId}`)}
+                            onClick={() => navigate(`/management/invoices`)}
                           >
                             View Invoice
                           </button>

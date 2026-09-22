@@ -14,8 +14,8 @@ public class WorkReportService
     {
         _context = context;
     }
-    
-    // TECHNICIAN - CREATE WORK REPORT
+
+
     public async Task<bool> CreateAsync(
         int userId,
         CreateWorkReportDto dto)
@@ -26,7 +26,7 @@ public class WorkReportService
 
         try
         {
-            // Find technician
+
             var technician = await _context.Technicians
                 .FirstOrDefaultAsync(t =>
                     t.UserId == userId &&
@@ -36,7 +36,6 @@ public class WorkReportService
                 return false;
 
 
-            // Find service request
             var request = await _context.ServiceRequests
                 .FirstOrDefaultAsync(sr =>
                     sr.Id == dto.ServiceRequestId);
@@ -45,17 +44,14 @@ public class WorkReportService
                 return false;
 
 
-            // Make sure request belongs to technician
             if (request.TechnicianId != technician.Id)
                 return false;
 
 
-            // Work report can only be submitted for completed work
             if (request.Status != "Completed")
                 return false;
 
 
-            // Only one work report per service request
             var reportExists = await _context.WorkReports
                 .AnyAsync(w =>
                     w.ServiceRequestId == dto.ServiceRequestId);
@@ -64,7 +60,6 @@ public class WorkReportService
                 return false;
 
 
-            // Validate duplicate inventory items
             if (dto.Parts
                 .GroupBy(p => p.InventoryItemId)
                 .Any(g => g.Count() > 1))
@@ -73,11 +68,11 @@ public class WorkReportService
             }
 
 
-            // Get inventory items
             var inventoryIds = dto.Parts
                 .Select(p => p.InventoryItemId)
                 .Distinct()
                 .ToList();
+
 
             var inventoryItems = await _context.InventoryItems
                 .Where(i =>
@@ -86,56 +81,69 @@ public class WorkReportService
                 .ToListAsync();
 
 
-            // Every requested item must exist and be active
             if (inventoryItems.Count != inventoryIds.Count)
                 return false;
 
 
-            // Validate stock
             foreach (var part in dto.Parts)
             {
-                var inventoryItem = inventoryItems
-                    .First(i => i.Id == part.InventoryItemId);
-
                 if (part.Quantity <= 0)
                     return false;
 
-                if (inventoryItem.QuantityInStock < part.Quantity)
+                var inventoryItem = inventoryItems
+                    .First(i =>
+                        i.Id == part.InventoryItemId);
+
+                if (inventoryItem.QuantityInStock <
+                    part.Quantity)
+                {
                     return false;
+                }
             }
 
 
-            // Create work report
             var report = new WorkReport
             {
-                ServiceRequestId = dto.ServiceRequestId,
+                ServiceRequestId =
+                    dto.ServiceRequestId,
 
-                TechnicianId = technician.Id,
+                TechnicianId =
+                    technician.Id,
 
-                Diagnosis = dto.Diagnosis.Trim(),
+                Diagnosis =
+                    dto.Diagnosis.Trim(),
 
-                WorkPerformed = dto.WorkPerformed.Trim(),
+                WorkPerformed =
+                    dto.WorkPerformed.Trim(),
 
-                LabourHours = dto.LabourHours,
+                LabourHours =
+                    dto.LabourHours,
 
                 SuggestedLabourCharge =
                     dto.SuggestedLabourCharge,
 
-                Resolution = dto.Resolution.Trim(),
+                Resolution =
+                    dto.Resolution.Trim(),
 
                 CustomerSignature =
-                    dto.CustomerSignature?.Trim() ?? string.Empty,
+                    dto.CustomerSignature?.Trim()
+                    ?? string.Empty,
 
                 TechnicianRemarks =
-                    dto.TechnicianRemarks?.Trim() ?? string.Empty,
+                    dto.TechnicianRemarks?.Trim()
+                    ?? string.Empty,
 
-                WarrantyDays = dto.WarrantyDays,
+                WarrantyDays =
+                    dto.WarrantyDays,
 
-                ManagerReviewStatus = "Pending",
+                ManagerReviewStatus =
+                    "Pending",
 
-                CorrectionReason = null,
+                CorrectionReason =
+                    null,
 
-                SubmittedAt = DateTime.UtcNow
+                SubmittedAt =
+                    DateTime.UtcNow
             };
 
 
@@ -144,42 +152,165 @@ public class WorkReportService
             await _context.SaveChangesAsync();
 
 
-            // Create WorkReportPart records
             foreach (var part in dto.Parts)
             {
                 var inventoryItem = inventoryItems
-                    .First(i => i.Id == part.InventoryItemId);
+                    .First(i =>
+                        i.Id == part.InventoryItemId);
+
 
                 var totalPrice =
-                    inventoryItem.UnitPrice * part.Quantity;
+                    inventoryItem.UnitPrice *
+                    part.Quantity;
+
 
                 var reportPart = new WorkReportPart
                 {
-                    WorkReportId = report.Id,
+                    WorkReportId =
+                        report.Id,
 
                     InventoryItemId =
                         inventoryItem.Id,
 
-                    Quantity = part.Quantity,
+                    Quantity =
+                        part.Quantity,
 
-                    // Snapshot current price
+
                     UnitPrice =
                         inventoryItem.UnitPrice,
 
-                    // Server calculates total
+
                     TotalPrice =
                         totalPrice
                 };
 
-                _context.WorkReportParts.Add(reportPart);
+
+                _context.WorkReportParts.Add(
+                    reportPart);
 
 
-                // Deduct inventory
                 inventoryItem.QuantityInStock -=
                     part.Quantity;
 
                 inventoryItem.UpdatedAt =
                     DateTime.UtcNow;
+
+
+                var movement = new StockMovement
+                {
+                    InventoryItemId =
+                        inventoryItem.Id,
+
+                    QuantityChange =
+                        -part.Quantity,
+
+                    QuantityAfterChange =
+                        inventoryItem.QuantityInStock,
+
+                    Reason =
+                        $"Used in Work Report #{report.Id}",
+
+                    UserId =
+                        userId,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+
+                _context.StockMovements.Add(
+                    movement);
+            }
+
+
+            await _context.SaveChangesAsync();
+
+
+            var managerIds = await _context.Users
+                .Where(u =>
+                    u.Role == "Manager" &&
+                    u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+
+            foreach (var managerId in managerIds)
+            {
+                var notification = new Notification
+                {
+                    UserId =
+                        managerId,
+
+                    Title =
+                        "New Work Report Submitted",
+
+                    Message =
+                        $"A new work report #{report.Id} has been submitted and is waiting for your review.",
+
+                    Type =
+                        "WorkReport",
+
+                    RelatedEntityType =
+                        "WorkReport",
+
+                    RelatedEntityId =
+                        report.Id,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+
+                _context.Notifications.Add(
+                    notification);
+            }
+
+
+            var lowStockItems = inventoryItems
+                .Where(i =>
+                    i.IsActive &&
+                    i.QuantityInStock <= i.ReorderLevel)
+                .ToList();
+
+
+            foreach (var item in lowStockItems)
+            {
+                foreach (var managerId in managerIds)
+                {
+                    var notification = new Notification
+                    {
+                        UserId =
+                            managerId,
+
+                        Title =
+                            "Low Stock Alert",
+
+                        Message =
+                            $"Inventory item '{item.Name}' (SKU: {item.SKU}) is low on stock. Current stock: {item.QuantityInStock}. Reorder level: {item.ReorderLevel}.",
+
+                        Type =
+                            "Inventory",
+
+                        RelatedEntityType =
+                            "InventoryItem",
+
+                        RelatedEntityId =
+                            item.Id,
+
+                        IsRead =
+                            false,
+
+                        CreatedAt =
+                            DateTime.UtcNow
+                    };
+
+
+                    _context.Notifications.Add(
+                        notification);
+                }
             }
 
 
@@ -192,17 +323,19 @@ public class WorkReportService
         catch
         {
             await transaction.RollbackAsync();
+
             return false;
         }
     }
-    
-    // TECHNICIAN - GET OWN REPORTS
 
 
     public async Task<List<WorkReportDto>> GetMyReportsAsync(
         int userId)
     {
         var reports = await _context.WorkReports
+
+            .AsNoTracking()
+
             .Include(w => w.Technician)
                 .ThenInclude(t => t.User)
 
@@ -218,7 +351,8 @@ public class WorkReportService
             .Where(w =>
                 w.Technician.UserId == userId)
 
-            .OrderByDescending(w => w.SubmittedAt)
+            .OrderByDescending(w =>
+                w.SubmittedAt)
 
             .ToListAsync();
 
@@ -228,8 +362,6 @@ public class WorkReportService
             .ToList();
     }
 
-    
-    // TECHNICIAN - UPDATE CORRECTION
 
     public async Task<bool> UpdateAsync(
         int reportId,
@@ -242,7 +374,7 @@ public class WorkReportService
 
         try
         {
-            // Find technician
+
             var technician = await _context.Technicians
                 .FirstOrDefaultAsync(t =>
                     t.UserId == userId &&
@@ -252,7 +384,6 @@ public class WorkReportService
                 return false;
 
 
-            // Find report + existing parts
             var report = await _context.WorkReports
                 .Include(w => w.Parts)
                 .FirstOrDefaultAsync(w =>
@@ -263,7 +394,6 @@ public class WorkReportService
                 return false;
 
 
-            // Only correction-required reports can be edited
             if (report.ManagerReviewStatus !=
                 "CorrectionRequired")
             {
@@ -271,7 +401,6 @@ public class WorkReportService
             }
 
 
-            // Prevent duplicate inventory items
             if (dto.Parts
                 .GroupBy(p => p.InventoryItemId)
                 .Any(g => g.Count() > 1))
@@ -280,7 +409,6 @@ public class WorkReportService
             }
 
 
-            // Load new inventory items
             var inventoryIds = dto.Parts
                 .Select(p => p.InventoryItemId)
                 .Distinct()
@@ -294,39 +422,70 @@ public class WorkReportService
                 .ToListAsync();
 
 
-            if (inventoryItems.Count != inventoryIds.Count)
+            if (inventoryItems.Count !=
+                inventoryIds.Count)
+            {
                 return false;
+            }
 
-            
-            // Restore stock used by old report
 
             foreach (var oldPart in report.Parts)
             {
                 var oldInventoryItem =
                     await _context.InventoryItems
                         .FirstOrDefaultAsync(i =>
-                            i.Id == oldPart.InventoryItemId);
+                            i.Id ==
+                            oldPart.InventoryItemId);
 
                 if (oldInventoryItem == null)
                     return false;
+
 
                 oldInventoryItem.QuantityInStock +=
                     oldPart.Quantity;
 
                 oldInventoryItem.UpdatedAt =
                     DateTime.UtcNow;
+
+
+                var restoreMovement =
+                    new StockMovement
+                    {
+                        InventoryItemId =
+                            oldInventoryItem.Id,
+
+                        QuantityChange =
+                            oldPart.Quantity,
+
+                        QuantityAfterChange =
+                            oldInventoryItem.QuantityInStock,
+
+                        Reason =
+                            $"Stock restored during correction of Work Report #{report.Id}",
+
+                        UserId =
+                            userId,
+
+                        CreatedAt =
+                            DateTime.UtcNow
+                    };
+
+
+                _context.StockMovements.Add(
+                    restoreMovement);
             }
 
-            
-            // Validate stock for new parts AFTER restoration
 
             foreach (var part in dto.Parts)
             {
-                var inventoryItem = inventoryItems
-                    .First(i => i.Id == part.InventoryItemId);
-
                 if (part.Quantity <= 0)
                     return false;
+
+
+                var inventoryItem =
+                    inventoryItems.First(i =>
+                        i.Id == part.InventoryItemId);
+
 
                 if (inventoryItem.QuantityInStock <
                     part.Quantity)
@@ -335,8 +494,6 @@ public class WorkReportService
                 }
             }
 
-            
-            // Update report
 
             report.Diagnosis =
                 dto.Diagnosis.Trim();
@@ -364,24 +521,22 @@ public class WorkReportService
             report.WarrantyDays =
                 dto.WarrantyDays;
 
-            
-            // Remove old parts
-
 
             _context.WorkReportParts.RemoveRange(
                 report.Parts);
-            
-            // Add new parts
+
 
             foreach (var part in dto.Parts)
             {
-                var inventoryItem = inventoryItems
-                    .First(i =>
+                var inventoryItem =
+                    inventoryItems.First(i =>
                         i.Id == part.InventoryItemId);
+
 
                 var totalPrice =
                     inventoryItem.UnitPrice *
                     part.Quantity;
+
 
                 var newReportPart =
                     new WorkReportPart
@@ -402,25 +557,145 @@ public class WorkReportService
                             totalPrice
                     };
 
+
                 _context.WorkReportParts.Add(
                     newReportPart);
 
 
-                // Deduct new stock
                 inventoryItem.QuantityInStock -=
                     part.Quantity;
 
                 inventoryItem.UpdatedAt =
                     DateTime.UtcNow;
+
+
+                var movement =
+                    new StockMovement
+                    {
+                        InventoryItemId =
+                            inventoryItem.Id,
+
+                        QuantityChange =
+                            -part.Quantity,
+
+                        QuantityAfterChange =
+                            inventoryItem.QuantityInStock,
+
+                        Reason =
+                            $"Used in corrected Work Report #{report.Id}",
+
+                        UserId =
+                            userId,
+
+                        CreatedAt =
+                            DateTime.UtcNow
+                    };
+
+
+                _context.StockMovements.Add(
+                    movement);
             }
 
 
-            // Back to manager review
             report.ManagerReviewStatus =
                 "Pending";
 
             report.CorrectionReason =
                 null;
+
+
+            await _context.SaveChangesAsync();
+
+
+            var managerIds = await _context.Users
+                .Where(u =>
+                    u.Role == "Manager" &&
+                    u.IsActive)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+
+            foreach (var managerId in managerIds)
+            {
+                var notification = new Notification
+                {
+                    UserId =
+                        managerId,
+
+                    Title =
+                        "Work Report Corrected",
+
+                    Message =
+                        $"Work report #{report.Id} has been corrected and resubmitted for review.",
+
+                    Type =
+                        "WorkReport",
+
+                    RelatedEntityType =
+                        "WorkReport",
+
+                    RelatedEntityId =
+                        report.Id,
+
+                    IsRead =
+                        false,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+
+                _context.Notifications.Add(
+                    notification);
+            }
+
+
+            var lowStockItems =
+                inventoryItems
+                    .Where(i =>
+                        i.IsActive &&
+                        i.QuantityInStock <=
+                        i.ReorderLevel)
+                    .ToList();
+
+
+            foreach (var item in lowStockItems)
+            {
+                foreach (var managerId in managerIds)
+                {
+                    var notification =
+                        new Notification
+                        {
+                            UserId =
+                                managerId,
+
+                            Title =
+                                "Low Stock Alert",
+
+                            Message =
+                                $"Inventory item '{item.Name}' (SKU: {item.SKU}) is low on stock. Current stock: {item.QuantityInStock}. Reorder level: {item.ReorderLevel}.",
+
+                            Type =
+                                "Inventory",
+
+                            RelatedEntityType =
+                                "InventoryItem",
+
+                            RelatedEntityId =
+                                item.Id,
+
+                            IsRead =
+                                false,
+
+                            CreatedAt =
+                                DateTime.UtcNow
+                        };
+
+
+                    _context.Notifications.Add(
+                        notification);
+                }
+            }
 
 
             await _context.SaveChangesAsync();
@@ -432,15 +707,17 @@ public class WorkReportService
         catch
         {
             await transaction.RollbackAsync();
+
             return false;
         }
     }
-    
-    // MANAGER - GET ALL REPORTS
+
 
     public async Task<List<WorkReportDto>> GetAllAsync()
     {
         var reports = await _context.WorkReports
+
+            .AsNoTracking()
 
             .Include(w => w.Technician)
                 .ThenInclude(t => t.User)
@@ -454,7 +731,8 @@ public class WorkReportService
             .Include(w => w.Parts)
                 .ThenInclude(p => p.InventoryItem)
 
-            .OrderByDescending(w => w.SubmittedAt)
+            .OrderByDescending(w =>
+                w.SubmittedAt)
 
             .ToListAsync();
 
@@ -464,13 +742,13 @@ public class WorkReportService
             .ToList();
     }
 
-    
-    // GET REPORT BY ID
 
     public async Task<WorkReportDto?> GetByIdAsync(
         int id)
     {
         var report = await _context.WorkReports
+
+            .AsNoTracking()
 
             .Include(w => w.Technician)
                 .ThenInclude(t => t.User)
@@ -495,84 +773,201 @@ public class WorkReportService
         return MapToDto(report);
     }
 
-    
-    // MANAGER - APPROVE
+
+    public async Task<WorkReportDto?> GetByServiceRequestIdAsync(
+        int serviceRequestId)
+    {
+        var report = await _context.WorkReports
+            .AsNoTracking()
+            .Include(w => w.Technician)
+                .ThenInclude(t => t.User)
+            .Include(w => w.ServiceRequest)
+                .ThenInclude(sr => sr.Customer)
+            .Include(w => w.ServiceRequest)
+                .ThenInclude(sr => sr.Service)
+            .Include(w => w.Parts)
+                .ThenInclude(p => p.InventoryItem)
+            .FirstOrDefaultAsync(w =>
+                w.ServiceRequestId == serviceRequestId);
+
+        if (report == null)
+            return null;
+
+        return MapToDto(report);
+    }
+
 
     public async Task<bool> ApproveAsync(
         int reportId)
     {
-        var report = await _context.WorkReports
-            .FirstOrDefaultAsync(w =>
-                w.Id == reportId);
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync();
 
-
-        if (report == null)
-            return false;
-
-
-        if (report.ManagerReviewStatus !=
-            "Pending")
+        try
         {
+            var report = await _context.WorkReports
+                .Include(w => w.Technician)
+                .FirstOrDefaultAsync(w =>
+                    w.Id == reportId);
+
+
+            if (report == null)
+                return false;
+
+
+            if (report.ManagerReviewStatus !=
+                "Pending")
+            {
+                return false;
+            }
+
+
+            report.ManagerReviewStatus =
+                "Approved";
+
+            report.CorrectionReason =
+                null;
+
+
+            await _context.SaveChangesAsync();
+
+
+            var notification = new Notification
+            {
+                UserId =
+                    report.Technician.UserId,
+
+                Title =
+                    "Work Report Approved",
+
+                Message =
+                    $"Your work report #{report.Id} has been approved by the manager.",
+
+                Type =
+                    "WorkReport",
+
+                RelatedEntityType =
+                    "WorkReport",
+
+                RelatedEntityId =
+                    report.Id,
+
+                IsRead =
+                    false,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+
+            _context.Notifications.Add(
+                notification);
+
+
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+
             return false;
         }
-
-
-        report.ManagerReviewStatus =
-            "Approved";
-
-        report.CorrectionReason =
-            null;
-
-
-        await _context.SaveChangesAsync();
-
-        return true;
     }
 
-    
-    // MANAGER - REQUEST CORRECTION
 
     public async Task<bool> RequestCorrectionAsync(
         int reportId,
         string correctionReason)
     {
-        var report = await _context.WorkReports
-            .FirstOrDefaultAsync(w =>
-                w.Id == reportId);
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync();
 
-
-        if (report == null)
-            return false;
-
-
-        if (report.ManagerReviewStatus !=
-            "Pending")
+        try
         {
+            var report = await _context.WorkReports
+                .Include(w => w.Technician)
+                .FirstOrDefaultAsync(w =>
+                    w.Id == reportId);
+
+
+            if (report == null)
+                return false;
+
+
+            if (report.ManagerReviewStatus !=
+                "Pending")
+            {
+                return false;
+            }
+
+
+            if (string.IsNullOrWhiteSpace(
+                correctionReason))
+            {
+                return false;
+            }
+
+
+            report.ManagerReviewStatus =
+                "CorrectionRequired";
+
+            report.CorrectionReason =
+                correctionReason.Trim();
+
+
+            await _context.SaveChangesAsync();
+
+
+            var notification = new Notification
+            {
+                UserId =
+                    report.Technician.UserId,
+
+                Title =
+                    "Work Report Correction Required",
+
+                Message =
+                    $"Your work report #{report.Id} requires correction. Reason: {correctionReason.Trim()}",
+
+                Type =
+                    "WorkReport",
+
+                RelatedEntityType =
+                    "WorkReport",
+
+                RelatedEntityId =
+                    report.Id,
+
+                IsRead =
+                    false,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+
+            _context.Notifications.Add(
+                notification);
+
+
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+
             return false;
         }
-
-
-        if (string.IsNullOrWhiteSpace(
-            correctionReason))
-        {
-            return false;
-        }
-
-
-        report.ManagerReviewStatus =
-            "CorrectionRequired";
-
-        report.CorrectionReason =
-            correctionReason.Trim();
-
-
-        await _context.SaveChangesAsync();
-
-        return true;
     }
 
-    
-    // GET REPORTS BY STATUS
 
     public async Task<List<WorkReportDto>> GetByStatusAsync(
         string status)
@@ -582,6 +977,8 @@ public class WorkReportService
 
 
         var reports = await _context.WorkReports
+
+            .AsNoTracking()
 
             .Include(w => w.Technician)
                 .ThenInclude(t => t.User)
@@ -608,13 +1005,13 @@ public class WorkReportService
             .Select(MapToDto)
             .ToList();
     }
-    
-    // MANAGER DASHBOARD
+
 
     public async Task<object> GetDashboardAsync()
     {
         var reports = await _context.WorkReports
             .AsNoTracking()
+            .Include(w => w.Parts)
             .ToListAsync();
 
 
@@ -655,15 +1052,293 @@ public class WorkReportService
         };
     }
 
-    
-    // MAPPING
+
+    public async Task<bool> AddPartAsync(
+        int workReportId,
+        int userId,
+        AddWorkReportPartDto dto)
+    {
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        try
+        {
+            if (dto.Quantity <= 0)
+                return false;
+
+
+            var workReport = await _context.WorkReports
+                .Include(w => w.Technician)
+                .FirstOrDefaultAsync(w =>
+                    w.Id == workReportId &&
+                    w.Technician.UserId == userId);
+
+            if (workReport == null)
+                return false;
+
+
+            if (workReport.ManagerReviewStatus ==
+                "Approved")
+            {
+                return false;
+            }
+
+
+            var item = await _context.InventoryItems
+                .FirstOrDefaultAsync(i =>
+                    i.Id == dto.InventoryItemId &&
+                    i.IsActive);
+
+            if (item == null)
+                return false;
+
+
+            if (item.QuantityInStock <
+                dto.Quantity)
+            {
+                return false;
+            }
+
+
+            var alreadyExists =
+                await _context.WorkReportParts
+                    .AnyAsync(p =>
+                        p.WorkReportId ==
+                            workReportId &&
+                        p.InventoryItemId ==
+                            dto.InventoryItemId);
+
+            if (alreadyExists)
+                return false;
+
+
+            var totalPrice =
+                item.UnitPrice *
+                dto.Quantity;
+
+
+            var part = new WorkReportPart
+            {
+                WorkReportId =
+                    workReport.Id,
+
+                InventoryItemId =
+                    item.Id,
+
+                Quantity =
+                    dto.Quantity,
+
+                UnitPrice =
+                    item.UnitPrice,
+
+                TotalPrice =
+                    totalPrice
+            };
+
+
+            item.QuantityInStock -=
+                dto.Quantity;
+
+            item.UpdatedAt =
+                DateTime.UtcNow;
+
+
+            var movement = new StockMovement
+            {
+                InventoryItemId =
+                    item.Id,
+
+                QuantityChange =
+                    -dto.Quantity,
+
+                QuantityAfterChange =
+                    item.QuantityInStock,
+
+                Reason =
+                    $"Used in Work Report #{workReport.Id}",
+
+                UserId =
+                    userId,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+
+            _context.WorkReportParts.Add(
+                part);
+
+            _context.StockMovements.Add(
+                movement);
+
+
+            await _context.SaveChangesAsync();
+
+
+            if (item.QuantityInStock <=
+                item.ReorderLevel)
+            {
+                var managerIds = await _context.Users
+                    .Where(u =>
+                        u.Role == "Manager" &&
+                        u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+
+
+                foreach (var managerId in managerIds)
+                {
+                    var notification =
+                        new Notification
+                        {
+                            UserId =
+                                managerId,
+
+                            Title =
+                                "Low Stock Alert",
+
+                            Message =
+                                $"Inventory item '{item.Name}' (SKU: {item.SKU}) is low on stock. Current stock: {item.QuantityInStock}. Reorder level: {item.ReorderLevel}.",
+
+                            Type =
+                                "Inventory",
+
+                            RelatedEntityType =
+                                "InventoryItem",
+
+                            RelatedEntityId =
+                                item.Id,
+
+                            IsRead =
+                                false,
+
+                            CreatedAt =
+                                DateTime.UtcNow
+                        };
+
+
+                    _context.Notifications.Add(
+                        notification);
+                }
+
+
+                await _context.SaveChangesAsync();
+            }
+
+
+            await transaction.CommitAsync();
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+
+            return false;
+        }
+    }
+
+
+    public async Task<bool> RemovePartAsync(
+        int workReportId,
+        int partId,
+        int userId)
+    {
+        await using var transaction =
+            await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable);
+
+        try
+        {
+            var workReport = await _context.WorkReports
+                .Include(w => w.Technician)
+                .FirstOrDefaultAsync(w =>
+                    w.Id == workReportId &&
+                    w.Technician.UserId == userId);
+
+            if (workReport == null)
+                return false;
+
+
+            if (workReport.ManagerReviewStatus ==
+                "Approved")
+            {
+                return false;
+            }
+
+
+            var part = await _context.WorkReportParts
+                .Include(p => p.InventoryItem)
+                .FirstOrDefaultAsync(p =>
+                    p.Id == partId &&
+                    p.WorkReportId == workReportId);
+
+            if (part == null)
+                return false;
+
+
+            var item = part.InventoryItem;
+
+
+            item.QuantityInStock +=
+                part.Quantity;
+
+            item.UpdatedAt =
+                DateTime.UtcNow;
+
+
+            var movement = new StockMovement
+            {
+                InventoryItemId =
+                    item.Id,
+
+                QuantityChange =
+                    part.Quantity,
+
+                QuantityAfterChange =
+                    item.QuantityInStock,
+
+                Reason =
+                    $"Part removed from Work Report #{workReportId}",
+
+                UserId =
+                    userId,
+
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+
+            _context.WorkReportParts.Remove(
+                part);
+
+            _context.StockMovements.Add(
+                movement);
+
+
+            await _context.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+
+            return false;
+        }
+    }
+
 
     private static WorkReportDto MapToDto(
         WorkReport w)
     {
         return new WorkReportDto
         {
-            Id = w.Id,
+            Id =
+                w.Id,
 
             ServiceRequestId =
                 w.ServiceRequestId,
@@ -692,28 +1367,30 @@ public class WorkReportService
             SuggestedLabourCharge =
                 w.SuggestedLabourCharge,
 
-            Parts = w.Parts
-                .Select(p => new WorkReportPartDto
-                {
-                    InventoryItemId =
-                        p.InventoryItemId,
+            Parts =
+                w.Parts
+                    .Select(p =>
+                        new WorkReportPartDto
+                        {
+                            InventoryItemId =
+                                p.InventoryItemId,
 
-                    SKU =
-                        p.InventoryItem.SKU,
+                            SKU =
+                                p.InventoryItem.SKU,
 
-                    PartName =
-                        p.InventoryItem.Name,
+                            PartName =
+                                p.InventoryItem.Name,
 
-                    Quantity =
-                        p.Quantity,
+                            Quantity =
+                                p.Quantity,
 
-                    UnitPrice =
-                        p.UnitPrice,
+                            UnitPrice =
+                                p.UnitPrice,
 
-                    TotalPrice =
-                        p.TotalPrice
-                })
-                .ToList(),
+                            TotalPrice =
+                                p.TotalPrice
+                        })
+                    .ToList(),
 
             Resolution =
                 w.Resolution,
@@ -736,111 +1413,5 @@ public class WorkReportService
             SubmittedAt =
                 w.SubmittedAt
         };
-    }
-    
-    public async Task<bool> AddPartAsync(
-        int workReportId,
-        int userId,
-        AddWorkReportPartDto dto)
-    {
-        var workReport = await _context.WorkReports
-            .Include(w => w.Technician)
-            .FirstOrDefaultAsync(w =>
-                w.Id == workReportId &&
-                w.Technician.UserId == userId);
-
-        if (workReport == null)
-            return false;
-
-        var item = await _context.InventoryItems
-            .FirstOrDefaultAsync(i => i.Id == dto.InventoryItemId);
-
-        if (item == null)
-            return false;
-
-        if (!item.IsActive)
-            return false;
-
-        if (item.QuantityInStock < dto.Quantity)
-            return false;
-
-        var totalPrice =
-            item.UnitPrice * dto.Quantity;
-
-        var part = new WorkReportPart
-        {
-            WorkReportId = workReport.Id,
-            InventoryItemId = item.Id,
-            Quantity = dto.Quantity,
-            UnitPrice = item.UnitPrice,
-            TotalPrice = totalPrice
-        };
-
-        item.QuantityInStock -= dto.Quantity;
-        item.UpdatedAt = DateTime.UtcNow;
-
-        var movement = new StockMovement
-        {
-            InventoryItemId = item.Id,
-            QuantityChange = -dto.Quantity,
-            QuantityAfterChange = item.QuantityInStock,
-            Reason = $"Used in Work Report #{workReport.Id}",
-            UserId = userId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.WorkReportParts.Add(part);
-        _context.StockMovements.Add(movement);
-
-        await _context.SaveChangesAsync();
-
-        return true;
-    }
-    
-    public async Task<bool> RemovePartAsync(
-        int workReportId,
-        int partId,
-        int userId)
-    {
-        var workReport = await _context.WorkReports
-            .Include(w => w.Technician)
-            .FirstOrDefaultAsync(w =>
-                w.Id == workReportId &&
-                w.Technician.UserId == userId);
-
-        if (workReport == null)
-            return false;
-
-        var part = await _context.WorkReportParts
-            .Include(p => p.InventoryItem)
-            .FirstOrDefaultAsync(p =>
-                p.Id == partId &&
-                p.WorkReportId == workReportId);
-
-        if (part == null)
-            return false;
-
-        var item = part.InventoryItem;
-
-        // Return the used quantity back to inventory
-        item.QuantityInStock += part.Quantity;
-        item.UpdatedAt = DateTime.UtcNow;
-
-        var movement = new StockMovement
-        {
-            InventoryItemId = item.Id,
-            QuantityChange = part.Quantity,
-            QuantityAfterChange = item.QuantityInStock,
-            Reason = $"Part removed from Work Report #{workReportId}",
-            UserId = userId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.WorkReportParts.Remove(part);
-        _context.StockMovements.Add(movement);
-
-        await _context.SaveChangesAsync();
-
-        return true;
     }
 }

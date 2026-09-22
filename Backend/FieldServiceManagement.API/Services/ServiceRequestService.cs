@@ -8,16 +8,17 @@ namespace FieldServiceManagement.API.Services;
 public class ServiceRequestService
 {
     private readonly AppDbContext _context;
+    private readonly NotificationService _notificationService;
 
-    public ServiceRequestService(AppDbContext context)
+    public ServiceRequestService(
+        AppDbContext context,
+        NotificationService notificationService)
     {
         _context = context;
+        _notificationService = notificationService;
     }
-    
 
-    // CUSTOMER THINGS
-    
-    // Create Service Request
+
     public async Task<bool> CreateAsync(
         int customerId,
         CreateServiceRequestDto dto)
@@ -47,11 +48,38 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        var managers = await _context.Users
+            .Where(u =>
+                u.Role == "Owner" ||
+                u.Role == "Manager")
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var managerId in managers)
+        {
+            await _notificationService.CreateAsync(
+                new DTOs.Notifications.CreateNotificationDto
+                {
+                    UserId = managerId,
+
+                    Title = "New Service Request",
+
+                    Message =
+                        $"A new service request #{request.Id} has been created.",
+
+                    Type = "ServiceRequest",
+
+                    RelatedEntityType = "ServiceRequest",
+
+                    RelatedEntityId = request.Id
+                });
+        }
+
         return true;
     }
 
 
-    // Get Customer's Requests
     public async Task<List<ServiceRequestDto>> GetCustomerRequestsAsync(
         int customerId)
     {
@@ -87,7 +115,6 @@ public class ServiceRequestService
     }
 
 
-    // Get Customer Request By ID
     public async Task<ServiceRequestDto?> GetCustomerRequestByIdAsync(
         int requestId,
         int customerId)
@@ -126,7 +153,6 @@ public class ServiceRequestService
     }
 
 
-    // Update Customer Request
     public async Task<bool> UpdateAsync(
         int requestId,
         int customerId,
@@ -140,11 +166,9 @@ public class ServiceRequestService
         if (request == null)
             return false;
 
-        // Customer can update only pending requests
         if (request.Status != "Pending")
             return false;
 
-        // Validate Service
         var service = await _context.Services
             .FirstOrDefaultAsync(s =>
                 s.Id == dto.ServiceId &&
@@ -162,11 +186,38 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        var managers = await _context.Users
+            .Where(u =>
+                u.Role == "Owner" ||
+                u.Role == "Manager")
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var managerId in managers)
+        {
+            await _notificationService.CreateAsync(
+                new DTOs.Notifications.CreateNotificationDto
+                {
+                    UserId = managerId,
+
+                    Title = "Service Request Updated",
+
+                    Message =
+                        $"Service request #{request.Id} has been updated by the customer.",
+
+                    Type = "ServiceRequest",
+
+                    RelatedEntityType = "ServiceRequest",
+
+                    RelatedEntityId = request.Id
+                });
+        }
+
         return true;
     }
 
 
-    // Cancel Customer Request
     public async Task<bool> CancelAsync(
         int requestId,
         int customerId)
@@ -179,7 +230,6 @@ public class ServiceRequestService
         if (request == null)
             return false;
 
-        // Only pending requests can be cancelled
         if (request.Status != "Pending")
             return false;
 
@@ -188,11 +238,38 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        var managers = await _context.Users
+            .Where(u =>
+                u.Role == "Owner" ||
+                u.Role == "Manager")
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        foreach (var managerId in managers)
+        {
+            await _notificationService.CreateAsync(
+                new DTOs.Notifications.CreateNotificationDto
+                {
+                    UserId = managerId,
+
+                    Title = "Service Request Cancelled",
+
+                    Message =
+                        $"Service request #{request.Id} has been cancelled by the customer.",
+
+                    Type = "ServiceRequest",
+
+                    RelatedEntityType = "ServiceRequest",
+
+                    RelatedEntityId = request.Id
+                });
+        }
+
         return true;
     }
 
 
-    // Customer Dashboard
     public async Task<object> GetCustomerDashboardAsync(
         int customerId)
     {
@@ -220,10 +297,6 @@ public class ServiceRequestService
     }
 
 
-    
-    // OWNER / MANAGER THINGS
-
-    // Get All Service Requests
     public async Task<List<ServiceRequestDto>> GetAllAsync()
     {
         var requests = await _context.ServiceRequests
@@ -259,7 +332,6 @@ public class ServiceRequestService
     }
 
 
-    // Get Service Request By ID
     public async Task<ServiceRequestDto?> GetByIdAsync(int id)
     {
         var request = await _context.ServiceRequests
@@ -297,7 +369,6 @@ public class ServiceRequestService
     }
 
 
-    // Get Requests By Status
     public async Task<List<ServiceRequestDto>> GetByStatusAsync(
         string status)
     {
@@ -335,7 +406,6 @@ public class ServiceRequestService
     }
 
 
-    // Search Service Requests
     public async Task<List<ServiceRequestDto>> SearchAsync(
         string name)
     {
@@ -375,7 +445,6 @@ public class ServiceRequestService
     }
 
 
-    // Assign Technician
     public async Task<bool> AssignTechnicianAsync(
         int requestId,
         AssignTechnicianDto dto)
@@ -394,6 +463,7 @@ public class ServiceRequestService
         }
 
         var newTechnician = await _context.Technicians
+            .Include(t => t.User)
             .FirstOrDefaultAsync(x =>
                 x.Id == dto.TechnicianId &&
                 x.IsActive &&
@@ -402,7 +472,6 @@ public class ServiceRequestService
         if (newTechnician == null)
             return false;
 
-        // If another technician is already assigned
         if (request.TechnicianId != null &&
             request.TechnicianId != newTechnician.Id)
         {
@@ -415,7 +484,6 @@ public class ServiceRequestService
             }
         }
 
-        // If the same technician is already assigned
         if (request.TechnicianId == newTechnician.Id)
             return false;
 
@@ -431,13 +499,47 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        await _notificationService.CreateAsync(
+            new DTOs.Notifications.CreateNotificationDto
+            {
+                UserId = newTechnician.UserId,
+
+                Title = "New Service Request Assigned",
+
+                Message =
+                    $"Service request #{request.Id} has been assigned to you.",
+
+                Type = "ServiceRequest",
+
+                RelatedEntityType = "ServiceRequest",
+
+                RelatedEntityId = request.Id
+            });
+
+
+        await _notificationService.CreateAsync(
+            new DTOs.Notifications.CreateNotificationDto
+            {
+                UserId = request.CustomerId,
+
+                Title = "Technician Assigned",
+
+                Message =
+                    $"A technician has been assigned to your service request #{request.Id}.",
+
+                Type = "ServiceRequest",
+
+                RelatedEntityType = "ServiceRequest",
+
+                RelatedEntityId = request.Id
+            });
+
+
         return true;
     }
 
-    
-    // TECHNICIAN THINGS
 
-    // Get Technician's Requests
     public async Task<List<ServiceRequestDto>> GetTechnicianRequestsAsync(
         int userId)
     {
@@ -477,10 +579,7 @@ public class ServiceRequestService
         }).ToList();
     }
 
-    
-    
 
-    // Start Job
     public async Task<bool> StartRequestAsync(
         int requestId,
         int userId)
@@ -504,11 +603,29 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        await _notificationService.CreateAsync(
+            new DTOs.Notifications.CreateNotificationDto
+            {
+                UserId = request.CustomerId,
+
+                Title = "Service Job Started",
+
+                Message =
+                    $"Your service request #{request.Id} is now in progress.",
+
+                Type = "ServiceRequest",
+
+                RelatedEntityType = "ServiceRequest",
+
+                RelatedEntityId = request.Id
+            });
+
+
         return true;
     }
 
 
-    // Complete Request By Technician
     public async Task<bool> CompleteRequestAsync(
         int requestId,
         int userId)
@@ -536,12 +653,27 @@ public class ServiceRequestService
 
         await _context.SaveChangesAsync();
 
+
+        await _notificationService.CreateAsync(
+            new DTOs.Notifications.CreateNotificationDto
+            {
+                UserId = request.CustomerId,
+
+                Title = "Service Request Completed",
+
+                Message =
+                    $"Your service request #{request.Id} has been completed.",
+
+                Type = "ServiceRequest",
+
+                RelatedEntityType = "ServiceRequest",
+
+                RelatedEntityId = request.Id
+            });
+
+
         return true;
     }
-
-
-    
-    // OWNER / MANAGER DASHBOARD
 
 
     public async Task<ServiceRequestDashboardDto> GetDashboardAsync()

@@ -1,7 +1,9 @@
 using FieldServiceManagement.API.Data;
 using FieldServiceManagement.API.Models;
-using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
 namespace FieldServiceManagement.API.Controllers;
 
 [Authorize]
@@ -10,13 +12,16 @@ namespace FieldServiceManagement.API.Controllers;
 public class ServicesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IValidator<Service> _serviceValidator;
 
-    public ServicesController(AppDbContext context)
+    public ServicesController(
+        AppDbContext context,
+        IValidator<Service> serviceValidator)
     {
         _context = context;
+        _serviceValidator = serviceValidator;
     }
 
-    // GET : api/Services
     [HttpGet]
     public IActionResult GetAllServices()
     {
@@ -29,8 +34,7 @@ public class ServicesController : ControllerBase
             data = services
         });
     }
-    
-    // GET : api/Services/available
+
     [Authorize(Roles = "Customer")]
     [HttpGet("available")]
     public IActionResult GetAvailableServices()
@@ -46,7 +50,7 @@ public class ServicesController : ControllerBase
             data = services
         });
     }
-    
+
     [HttpGet("search")]
     public IActionResult SearchService(string name)
     {
@@ -71,7 +75,6 @@ public class ServicesController : ControllerBase
         });
     }
 
-    // GET : api/Services/1
     [HttpGet("{id}")]
     public IActionResult GetServiceById(int id)
     {
@@ -93,13 +96,20 @@ public class ServicesController : ControllerBase
         });
     }
 
-    // POST : api/Services
     [HttpPost]
-    public IActionResult InsertService(Service service)
+    public async Task<IActionResult> InsertService(Service service)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-        
+        var validationResult = await _serviceValidator.ValidateAsync(service);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
+
         var existingService = _context.Services
             .FirstOrDefault(x => x.ServiceName == service.ServiceName);
 
@@ -127,9 +137,8 @@ public class ServicesController : ControllerBase
         );
     }
 
-    // PUT : api/Services/1
     [HttpPut("{id}")]
-    public IActionResult UpdateService(int id, Service service)
+    public async Task<IActionResult> UpdateService(int id, Service service)
     {
         if (id != service.Id)
         {
@@ -137,6 +146,17 @@ public class ServicesController : ControllerBase
             {
                 success = false,
                 message = "Service ID mismatch."
+            });
+        }
+
+        var validationResult = await _serviceValidator.ValidateAsync(service);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
             });
         }
 
@@ -150,7 +170,7 @@ public class ServicesController : ControllerBase
                 message = "Service not found."
             });
         }
-        
+
         var duplicateService = _context.Services.FirstOrDefault(x =>
             x.ServiceName == service.ServiceName &&
             x.Id != id);
@@ -181,7 +201,6 @@ public class ServicesController : ControllerBase
         });
     }
 
-    // DELETE : api/Services/1
     [HttpDelete("{id}")]
     public IActionResult DeleteService(int id)
     {
@@ -205,7 +224,7 @@ public class ServicesController : ControllerBase
             message = "Service deleted successfully."
         });
     }
-    
+
     [HttpPatch("{id}/toggle")]
     public IActionResult ToggleServiceStatus(int id)
     {
@@ -234,4 +253,3 @@ public class ServicesController : ControllerBase
         });
     }
 }
-

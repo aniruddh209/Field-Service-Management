@@ -73,42 +73,51 @@ function ManagementSchedulePage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {displayedJobs.map(job => (
-            <div key={job.id} className="data-card">
-              <div className="data-card__header" style={{ alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{
-                    width: 38, height: 38, borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-primary-light)', color: 'var(--color-primary)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <Clock size={18} />
+          {displayedJobs.map(job => {
+            const reqNumber = job.requestNumber || `SR-${job.id}`
+            const serviceTitle = job.serviceName || job.service || 'Service'
+            const jobDate = job.preferredDate || job.date
+            const customerName = job.customerName || job.customer || 'Customer'
+            const techName = job.assignedTechnicianName || job.technicianName || job.technician || 'Unassigned'
+            const address = job.serviceAddress || job.addressShortText || 'Location Provided'
+
+            return (
+              <div key={job.id} className="data-card">
+                <div className="data-card__header" style={{ alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: 'var(--radius-md)',
+                      background: 'var(--color-primary-light)', color: 'var(--color-primary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <Clock size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{serviceTitle}</h3>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>
+                        {reqNumber} · {formatDate(jobDate)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{job.service}</h3>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>
-                      {job.requestNumber} · {formatDate(job.date)} · {job.time}
-                    </p>
+                  <StatusBadge status={job.status} />
+                </div>
+                <div className="data-card__body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                    <ClipboardList size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+                    <span>Customer: <strong>{customerName}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                    <User size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+                    <span>Technician: <strong>{techName}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                    <MapPin size={14} style={{ color: 'var(--color-text-tertiary)' }} />
+                    <span>Location: <strong>{address}</strong></span>
                   </div>
                 </div>
-                <StatusBadge status={job.status} />
               </div>
-              <div className="data-card__body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
-                  <ClipboardList size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>Customer: <strong>{job.customer}</strong></span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
-                  <User size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>Technician: <strong>{job.technician}</strong></span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
-                  <MapPin size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>Location: <strong>{job.addressShortText}</strong></span>
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </PageContainer>

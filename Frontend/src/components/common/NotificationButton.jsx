@@ -1,25 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Check, CheckCheck } from 'lucide-react'
+import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import {
   getNotificationsForUser,
   markAsRead,
-  markAllAsRead
+  markAllAsRead,
+  clearNotification,
+  clearAllNotifications
 } from '../../services/notificationService.js'
-
-// ====================================
-// NotificationButton — User-Specific Notifications
-// ====================================
-//
-// PRIVACY FIX: Notifications are filtered by userId.
-// Each user only sees their own notifications.
-//
-// Customer → their request updates only
-// Owner/Manager → business-wide operational alerts
-// Technician → their job assignments only
-//
-// ====================================
 
 function NotificationButton() {
   const { user } = useAuth()
@@ -32,8 +21,12 @@ function NotificationButton() {
   useEffect(() => {
     async function loadNotifications() {
       if (!user?.id) return
-      const data = await getNotificationsForUser(user.id)
-      setNotifications(data)
+      try {
+        const data = await getNotificationsForUser(user.id)
+        setNotifications(data || [])
+      } catch (err) {
+        console.error('Failed to load notifications:', err)
+      }
     }
     loadNotifications()
   }, [user?.id])
@@ -54,10 +47,14 @@ function NotificationButton() {
   // Mark a single notification as read and navigate if applicable
   async function handleNotificationClick(notification) {
     if (!notification.isRead) {
-      await markAsRead(notification.id)
-      setNotifications(prev =>
-        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
-      )
+      try {
+        await markAsRead(notification.id)
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+        )
+      } catch (err) {
+        console.error('Failed to mark notification read:', err)
+      }
     }
 
     // Navigate to the related entity based on role
@@ -77,8 +74,34 @@ function NotificationButton() {
   // Mark all as read
   async function handleMarkAllRead() {
     if (!user?.id) return
-    await markAllAsRead(user.id)
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    try {
+      await markAllAsRead(user.id)
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    } catch (err) {
+      console.error('Failed to mark all read:', err)
+    }
+  }
+
+  // Clear single notification
+  async function handleClearSingle(e, id) {
+    e.stopPropagation()
+    try {
+      await clearNotification(id)
+      setNotifications(prev => prev.filter(n => n.id !== id))
+    } catch (err) {
+      console.error('Failed to clear notification:', err)
+    }
+  }
+
+  // Clear all notifications
+  async function handleClearAll() {
+    if (!user?.id) return
+    try {
+      await clearAllNotifications()
+      setNotifications([])
+    } catch (err) {
+      console.error('Failed to clear all notifications:', err)
+    }
   }
 
   // Format relative time
@@ -112,20 +135,32 @@ function NotificationButton() {
 
       {isOpen && (
         <div className="notification-btn__dropdown">
-          <div className="notification-btn__header">
-            <h4>Notifications</h4>
-            {unreadCount > 0 ? (
-              <button
-                className="notification-btn__mark-all"
-                onClick={handleMarkAllRead}
-                title="Mark all as read"
-              >
-                <CheckCheck size={14} />
-                Mark all read
-              </button>
-            ) : (
-              <span className="notification-btn__count">All read</span>
-            )}
+          <div className="notification-btn__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h4 style={{ margin: 0 }}>Notifications</h4>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {unreadCount > 0 && (
+                <button
+                  className="notification-btn__mark-all"
+                  onClick={handleMarkAllRead}
+                  title="Mark all as read"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', color: 'var(--color-primary)' }}
+                >
+                  <CheckCheck size={14} />
+                  Read all
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  className="notification-btn__mark-all"
+                  onClick={handleClearAll}
+                  title="Clear all notifications"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', color: 'var(--color-danger)' }}
+                >
+                  <Trash2 size={13} />
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="notification-btn__list">
@@ -141,17 +176,39 @@ function NotificationButton() {
                   onClick={() => handleNotificationClick(notification)}
                   role="button"
                   tabIndex={0}
+                  style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
                 >
-                  <div className="notification-btn__item-content">
+                  <div className="notification-btn__item-content" style={{ flex: 1, paddingRight: 8 }}>
                     <p className="notification-btn__item-title">{notification.title}</p>
                     <p className="notification-btn__item-message">{notification.message}</p>
                     <span className="notification-btn__item-time">
                       {formatRelativeTime(notification.createdAt)}
                     </span>
                   </div>
-                  {!notification.isRead && (
-                    <div className="notification-btn__item-dot"></div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {!notification.isRead && (
+                      <div className="notification-btn__item-dot"></div>
+                    )}
+                    <button
+                      onClick={(e) => handleClearSingle(e, notification.id)}
+                      title="Clear notification"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--color-text-tertiary)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyIncontent: 'center'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-danger)'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-tertiary)'}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))
             )}

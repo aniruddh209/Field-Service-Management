@@ -1,46 +1,41 @@
 using FieldServiceManagement.API.Data;
 using FieldServiceManagement.API.Models;
+using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FieldServiceManagement.API.Controllers;
 
+[Authorize(Roles = "Owner,Manager,Admin")]
 [Route("api/[controller]")]
 [ApiController]
 public class UsersController : ControllerBase
 {
-    #region Configuration
-
     private readonly AppDbContext _context;
+    private readonly IValidator<User> _userValidator;
 
-    public UsersController(AppDbContext context)
+    public UsersController(
+        AppDbContext context,
+        IValidator<User> userValidator)
     {
         _context = context;
+        _userValidator = userValidator;
     }
 
-    #endregion
-
-    #region Get All Users
-
-    // GET : api/Users
-
     [HttpGet]
-
     public IActionResult GetAllUsers()
     {
         var users = _context.Users.ToList();
 
-        return Ok(users);
+        return Ok(new
+        {
+            success = true,
+            count = users.Count,
+            data = users
+        });
     }
 
-    #endregion
-
-    #region Get User By Id
-
-    // GET : api/Users/1
-
     [HttpGet("{id}")]
-
     public IActionResult GetUserById(int id)
     {
         var user = _context.Users.Find(id);
@@ -53,36 +48,43 @@ public class UsersController : ControllerBase
         return Ok(user);
     }
 
-    #endregion
-
-    #region Insert User
-
-    // POST : api/Users
-
     [HttpPost]
-
-    public IActionResult InsertUser(User user)
+    public async Task<IActionResult> InsertUser(User user)
     {
-        _context.Users.Add(user);
+        var validationResult = await _userValidator.ValidateAsync(user);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
+        _context.Users.Add(user);
         _context.SaveChanges();
 
         return Ok("User Added Successfully");
     }
 
-    #endregion
-
-    #region Update User
-
-    // PUT : api/Users/1
-
     [HttpPut("{id}")]
-
-    public IActionResult UpdateUser(int id, User user)
+    public async Task<IActionResult> UpdateUser(int id, User user)
     {
         if (id != user.Id)
         {
             return BadRequest("Invalid User Id");
+        }
+
+        var validationResult = await _userValidator.ValidateAsync(user);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
         }
 
         var existingUser = _context.Users.Find(id);
@@ -107,14 +109,7 @@ public class UsersController : ControllerBase
         return Ok("User Updated Successfully");
     }
 
-    #endregion
-
-    #region Delete User
-
-    // DELETE : api/Users/1
-
     [HttpDelete("{id}")]
-
     public IActionResult DeleteUser(int id)
     {
         var user = _context.Users.Find(id);
@@ -125,11 +120,8 @@ public class UsersController : ControllerBase
         }
 
         _context.Users.Remove(user);
-
         _context.SaveChanges();
 
         return Ok("User Deleted Successfully");
     }
-
-    #endregion
 }

@@ -377,9 +377,9 @@ function TechnicianDetailsPage() {
               value={tempStatus}
               onChange={e => setTempStatus(e.target.value)}
             >
-              <option value="Active">Active</option>
+              <option value="Available">Available</option>
+              <option value="Busy">Busy</option>
               <option value="On Leave">On Leave</option>
-              <option value="Inactive">Inactive</option>
             </select>
             <span className="form-hint" style={{ marginTop: 4 }}>
               Operational Busy/Available statuses are derived dynamically from technician workload.

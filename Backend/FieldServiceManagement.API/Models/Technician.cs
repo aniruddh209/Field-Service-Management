@@ -8,24 +8,17 @@ public class Technician
     [Key]
     public int Id { get; set; }
 
-    [Required]
     public int UserId { get; set; }
 
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
-    [Required]
-    [StringLength(20)]
     public string EmployeeCode { get; set; } = string.Empty;
 
-    [Required]
-    [StringLength(100)]
     public string Specialization { get; set; } = string.Empty;
 
-    [Range(0, 40)]
     public int ExperienceYears { get; set; }
 
-    [Range(0, 5)]
     [Column(TypeName = "decimal(3,2)")]
     public decimal Rating { get; set; } = 5;
 
@@ -39,14 +32,10 @@ public class Technician
 
     public bool IsActive { get; set; } = true;
 
-    [StringLength(100)]
     public string? CurrentLocation { get; set; }
 
-    [StringLength(500)]
     public string? Notes { get; set; }
-    
-    [Required]
-    [StringLength(30)]
+
     public string Status { get; set; } = "Available";
 
     public DateTime JoiningDate { get; set; } = DateTime.UtcNow;

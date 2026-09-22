@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   Wrench,
   ArrowRight,
@@ -7,6 +7,7 @@ import {
   UserCheck,
   Truck,
   CheckCircle,
+  CheckCircle2,
   Users,
   Shield,
   Briefcase
@@ -42,18 +43,36 @@ const ROLE_TABS = [
 
 function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
 
+  const incomingEmail = location.state?.registeredEmail || ''
+  const incomingRole = location.state?.registeredRole || 'Customer'
+  const incomingMsg = location.state?.successMessage || ''
+
   // Selected role context tab
-  const [selectedRole, setSelectedRole] = useState('Customer')
+  const [selectedRole, setSelectedRole] = useState(incomingRole)
 
   // Form state
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(incomingEmail)
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [apiError, setApiError] = useState('')
+  const [successBanner, setSuccessBanner] = useState(incomingMsg)
+
+  useEffect(() => {
+    if (location.state?.registeredEmail) {
+      setEmail(location.state.registeredEmail)
+    }
+    if (location.state?.registeredRole) {
+      setSelectedRole(location.state.registeredRole)
+    }
+    if (location.state?.successMessage) {
+      setSuccessBanner(location.state.successMessage)
+    }
+  }, [location.state])
 
   // Validate form fields
   function validate() {
@@ -167,6 +186,19 @@ function LoginPage() {
           <p className="login-page__form-subtitle">
             Select portal role and enter your credentials to log in
           </p>
+
+          {/* Registration Success Banner */}
+          {successBanner && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              color: '#15803d', backgroundColor: '#f0fdf4', padding: '12px 14px',
+              borderRadius: '8px', fontSize: '13px', marginBottom: '16px', border: '1px solid #bbf7d0',
+              fontWeight: 500, lineHeight: 1.4
+            }}>
+              <CheckCircle2 size={18} style={{ flexShrink: 0, color: '#16a34a' }} />
+              <span>{successBanner}</span>
+            </div>
+          )}
 
           {/* Role Portal Selector Tabs */}
           <div style={{ marginBottom: 20 }}>

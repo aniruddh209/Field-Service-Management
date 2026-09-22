@@ -1,5 +1,6 @@
 using FieldServiceManagement.API.DTOs.Auth;
 using FieldServiceManagement.API.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FieldServiceManagement.API.Controllers;
@@ -9,17 +10,32 @@ namespace FieldServiceManagement.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+    private readonly IValidator<RegisterUserDto> _registerValidator;
+    private readonly IValidator<LoginRequestDto> _loginValidator;
 
-    public AuthController(AuthService authService)
+    public AuthController(
+        AuthService authService,
+        IValidator<RegisterUserDto> registerValidator,
+        IValidator<LoginRequestDto> loginValidator)
     {
         _authService = authService;
+        _registerValidator = registerValidator;
+        _loginValidator = loginValidator;
     }
-    
+
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterUserDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _registerValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var result = await _authService.RegisterAsync(dto);
 
@@ -38,12 +54,20 @@ public class AuthController : ControllerBase
             message = "Registration successful."
         });
     }
-    
+
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequestDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _loginValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var result = await _authService.LoginAsync(dto);
 

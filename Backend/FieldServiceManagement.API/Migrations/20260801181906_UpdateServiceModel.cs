@@ -4,10 +4,10 @@
 
 namespace FieldServiceManagement.API.Migrations
 {
-    /// <inheritdoc />
+
     public partial class UpdateServiceModel : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<string>(
@@ -20,7 +20,7 @@ namespace FieldServiceManagement.API.Migrations
                 oldType: "nvarchar(max)");
         }
 
-        /// <inheritdoc />
+
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<string>(

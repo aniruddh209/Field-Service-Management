@@ -1,5 +1,6 @@
 using FieldServiceManagement.API.DTOs.WorkReports;
 using FieldServiceManagement.API.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -12,23 +13,40 @@ namespace FieldServiceManagement.API.Controllers;
 public class WorkReportsController : ControllerBase
 {
     private readonly WorkReportService _service;
+    private readonly IValidator<CreateWorkReportDto> _createValidator;
+    private readonly IValidator<UpdateWorkReportDto> _updateValidator;
+    private readonly IValidator<AddWorkReportPartDto> _addPartValidator;
+    private readonly IValidator<RequestCorrectionDto> _requestCorrectionValidator;
 
-    public WorkReportsController(WorkReportService service)
+    public WorkReportsController(
+        WorkReportService service,
+        IValidator<CreateWorkReportDto> createValidator,
+        IValidator<UpdateWorkReportDto> updateValidator,
+        IValidator<AddWorkReportPartDto> addPartValidator,
+        IValidator<RequestCorrectionDto> requestCorrectionValidator)
     {
         _service = service;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _addPartValidator = addPartValidator;
+        _requestCorrectionValidator = requestCorrectionValidator;
     }
 
-    
-    // TECHNICIAN THINGS
-
-    // Create Work Report
     [Authorize(Roles = "Technician")]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateWorkReportDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _createValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var userId = int.Parse(
             User.FindFirstValue(ClaimTypes.NameIdentifier)!
@@ -54,8 +72,7 @@ public class WorkReportsController : ControllerBase
             message = "Work report created successfully."
         });
     }
-    
-    // Get technician's own work reports
+
     [Authorize(Roles = "Technician")]
     [HttpGet("technician/my")]
     public async Task<IActionResult> GetMyReports()
@@ -74,16 +91,23 @@ public class WorkReportsController : ControllerBase
             data = reports
         });
     }
-    
-    // Add part to work report
+
     [Authorize(Roles = "Technician")]
     [HttpPost("{id:int}/parts")]
     public async Task<IActionResult> AddPart(
         int id,
         [FromBody] AddWorkReportPartDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _addPartValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var userId = int.Parse(
             User.FindFirstValue(ClaimTypes.NameIdentifier)!
@@ -109,8 +133,7 @@ public class WorkReportsController : ControllerBase
             message = "Part added to work report successfully."
         });
     }
-    
-    // Remove part from work report
+
     [Authorize(Roles = "Technician")]
     [HttpDelete("{id:int}/parts/{partId:int}")]
     public async Task<IActionResult> RemovePart(
@@ -141,11 +164,7 @@ public class WorkReportsController : ControllerBase
             message = "Part removed successfully."
         });
     }
-    
-    
-// OWNER / MANAGER THINGS
 
-// Get all work reports
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -159,8 +178,7 @@ public class WorkReportsController : ControllerBase
             data = reports
         });
     }
-    
-    // Get work report by ID
+
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
@@ -182,9 +200,30 @@ public class WorkReportsController : ControllerBase
             data = report
         });
     }
-    
-    // Approve work report
-    [Authorize(Roles = "Owner,Manager")]
+
+    [Authorize(Roles = "Owner,Manager,Admin")]
+    [HttpGet("service-request/{serviceRequestId:int}")]
+    public async Task<IActionResult> GetByServiceRequestId(int serviceRequestId)
+    {
+        var report = await _service.GetByServiceRequestIdAsync(serviceRequestId);
+
+        if (report == null)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "Work report not found for this service request."
+            });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = report
+        });
+    }
+
+    [Authorize(Roles = "Owner,Manager,Admin")]
     [HttpPatch("{id:int}/approve")]
     public async Task<IActionResult> Approve(int id)
     {
@@ -206,16 +245,24 @@ public class WorkReportsController : ControllerBase
             message = "Work report approved successfully."
         });
     }
-    
-    // Request correction for work report
-    [Authorize(Roles = "Owner,Manager")]
+
+    [Authorize(Roles = "Owner,Manager,Admin")]
     [HttpPatch("{id:int}/correction")]
+    [HttpPost("{id:int}/request-correction")]
     public async Task<IActionResult> RequestCorrection(
         int id,
         [FromBody] RequestCorrectionDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _requestCorrectionValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var result =
             await _service.RequestCorrectionAsync(
@@ -237,17 +284,23 @@ public class WorkReportsController : ControllerBase
             message = "Correction requested successfully."
         });
     }
-    
-    
-    // Update work report
+
     [Authorize(Roles = "Technician")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateWorkReportDto dto)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        var validationResult = await _updateValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
+            });
+        }
 
         var userId = int.Parse(
             User.FindFirstValue(ClaimTypes.NameIdentifier)!
@@ -274,9 +327,7 @@ public class WorkReportsController : ControllerBase
             message = "Work report updated successfully."
         });
     }
-    
-    
-    // Get work reports by review status
+
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("status/{status}")]
     public async Task<IActionResult> GetByStatus(string status)
@@ -291,8 +342,7 @@ public class WorkReportsController : ControllerBase
             data = reports
         });
     }
-    
-    // Management dashboard
+
     [Authorize(Roles = "Owner,Manager")]
     [HttpGet("management-dashboard")]
     public async Task<IActionResult> GetManagementDashboard()
@@ -306,7 +356,4 @@ public class WorkReportsController : ControllerBase
             data = dashboard
         });
     }
-    
-    
-    
 }

@@ -1,61 +1,55 @@
 import api from "../api/api";
-import { servicesData as initialServices } from "../data/servicesData";
 
-let servicesList = [...initialServices];
-
-export async function getServices() {
-  try {
-    const response = await api.get("/Services");
-    if (response.data && Array.isArray(response.data)) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn("Backend API unavailable, using local services store:", err.message);
-  }
-  return servicesList;
+export async function getAllServices() {
+  const response = await api.get("/Services");
+  return response.data?.data || response.data || [];
 }
 
-export async function createService(serviceData) {
-  try {
-    const response = await api.post("/Services", serviceData);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local services store:", err.message);
-  }
+export const getServices = getAllServices;
 
-  const newService = {
-    id: servicesList.length ? Math.max(...servicesList.map(s => s.id)) + 1 : 1,
-    isActive: true,
-    isPopular: false,
-    whatsIncluded: [],
-    ...serviceData
-  };
-  servicesList.push(newService);
-  return newService;
+export async function getAvailableServices() {
+  const response = await api.get("/Services/available");
+  return response.data?.data || response.data || [];
 }
 
-export async function updateService(id, serviceData) {
-  try {
-    const response = await api.put(`/Services/${id}`, serviceData);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local services store:", err.message);
-  }
-
-  servicesList = servicesList.map(s => s.id === Number(id) ? { ...s, ...serviceData } : s);
-  return servicesList.find(s => s.id === Number(id));
+export async function getServiceById(id) {
+  const response = await api.get(`/Services/${id}`);
+  return response.data?.data || response.data;
 }
 
-export async function toggleServiceActive(id) {
-  try {
-    const response = await api.put(`/Services/${id}/toggle-active`);
-    if (response.data) return response.data;
-  } catch (err) {
-    console.warn("Backend API unavailable, using local services store:", err.message);
-  }
-
-  servicesList = servicesList.map(s => 
-    s.id === Number(id) ? { ...s, isActive: !s.isActive } : s
-  );
-  return servicesList.find(s => s.id === Number(id));
+export async function createService(serviceDto) {
+  const response = await api.post("/Services", serviceDto);
+  return response.data?.data || response.data;
 }
+
+export async function updateService(id, serviceDto) {
+  const response = await api.put(`/Services/${id}`, serviceDto);
+  return response.data?.data || response.data;
+}
+
+export async function deleteService(id) {
+  const response = await api.delete(`/Services/${id}`);
+  return response.data?.data || response.data;
+}
+
+export async function toggleServiceStatus(id) {
+  const response = await api.patch(`/Services/${id}/toggle`);
+  return response.data?.data || response.data;
+}
+
+export const toggleServiceActive = toggleServiceStatus;
+
+const serviceCatalogService = {
+  getAllServices,
+  getServices,
+  getAvailableServices,
+  getServiceById,
+  createService,
+  updateService,
+  deleteService,
+  toggleServiceStatus,
+  toggleServiceActive
+};
+
+export default serviceCatalogService;
+

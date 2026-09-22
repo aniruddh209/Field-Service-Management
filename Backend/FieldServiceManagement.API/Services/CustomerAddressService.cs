@@ -14,12 +14,12 @@ public class CustomerAddressService
         _context = context;
     }
 
-    // CREATE
+
     public async Task<CustomerAddress?> CreateAsync(
         int customerId,
         CreateCustomerAddressDto dto)
     {
-        // Make sure the customer actually exists.
+
         var customerExists = await _context.Users
             .AnyAsync(u =>
                 u.Id == customerId &&
@@ -51,7 +51,6 @@ public class CustomerAddressService
     }
 
 
-    // GET MY ADDRESSES
     public async Task<List<CustomerAddress>> GetMyAddressesAsync(
         int customerId)
     {
@@ -63,7 +62,6 @@ public class CustomerAddressService
     }
 
 
-    // GET ONE ADDRESS
     public async Task<CustomerAddress?> GetByIdAsync(
         int customerId,
         int id)
@@ -76,7 +74,6 @@ public class CustomerAddressService
     }
 
 
-    // UPDATE
     public async Task<CustomerAddress?> UpdateAsync(
         int customerId,
         int id,
@@ -113,7 +110,6 @@ public class CustomerAddressService
     }
 
 
-    // DELETE
     public async Task<bool> DeleteAsync(
         int customerId,
         int id)

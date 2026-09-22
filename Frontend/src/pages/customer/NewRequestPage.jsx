@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Check, Wrench, MapPin, Package, Calendar, FileText, Send, AlertCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getServices } from '../../services/serviceCatalogService.js'
+import { getServices, getAvailableServices } from '../../services/serviceCatalogService.js'
 import { getMyAddresses } from '../../services/addressService.js'
 import { getMyAssets } from '../../services/assetService.js'
 import { createServiceRequest } from '../../services/serviceRequestService.js'
@@ -43,11 +43,12 @@ function NewRequestPage() {
     async function load() {
       try {
         const [svcData, addrData, assetData] = await Promise.all([
-          getServices(),
-          getMyAddresses(user?.id),
-          getMyAssets(user?.id)
+          getAvailableServices().catch(() => getServices()),
+          getMyAddresses(),
+          getMyAssets()
         ])
-        setServices(svcData || [])
+        const activeOnly = (svcData || []).filter(s => s.isActive !== false)
+        setServices(activeOnly)
         setAddresses(addrData || [])
         setAssets(assetData || [])
 
@@ -75,11 +76,11 @@ function NewRequestPage() {
   function validate() {
     const e = {}
     if (!form.serviceId) e.serviceId = 'Please select a service'
-    if (!form.addressId) e.addressId = 'Please select a service address'
+    if (!form.addressId && addresses.length > 0) e.addressId = 'Please select a service address'
     if (!form.preferredDate) e.preferredDate = 'Please select a preferred date'
-    if (!form.preferredTime) e.preferredTime = 'Please select a preferred time slot'
     if (!form.problemTitle.trim()) e.problemTitle = 'Problem title is required'
-    if (!form.problemDescription.trim()) e.problemDescription = 'Please enter problem description'
+    const fullDesc = `${form.problemTitle.trim()}: ${form.problemDescription.trim()}`
+    if (fullDesc.length < 10) e.problemDescription = 'Problem description must be at least 10 characters'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -90,26 +91,35 @@ function NewRequestPage() {
 
     try {
       setSubmitting(true)
-      const data = {
-        customerId: user.id,
-        customerName: `${user.firstName} ${user.lastName}`,
+      setErrors({})
+
+      const formattedAddress = selectedAddress
+        ? `${selectedAddress.addressLine1 || selectedAddress.addressLine || ''}, ${selectedAddress.city || ''}, ${selectedAddress.state || ''} ${selectedAddress.postalCode || ''}`.trim()
+        : 'Service Address Provided'
+
+      const fullProblemDescription = form.problemDescription.trim() 
+        ? `${form.problemTitle.trim()} - ${form.problemDescription.trim()}`
+        : form.problemTitle.trim()
+
+      const notesParts = []
+      if (form.preferredTime) notesParts.push(`Time Slot: ${form.preferredTime}`)
+      if (selectedAsset) notesParts.push(`Asset: ${selectedAsset.assetName || selectedAsset.name} (${selectedAsset.modelNumber || selectedAsset.model || ''})`)
+      
+      const payload = {
         serviceId: Number(form.serviceId),
-        serviceName: selectedService ? (selectedService.serviceName || selectedService.name) : '',
-        addressId: form.addressId,
-        addressShortText: selectedAddress ? `${selectedAddress.addressLine || selectedAddress.addressLine1}, ${selectedAddress.city}` : '',
-        assetId: form.assetId || null,
-        assetName: selectedAsset ? selectedAsset.name : '',
-        preferredDate: form.preferredDate,
-        preferredTime: form.preferredTime,
-        problemTitle: form.problemTitle.trim(),
-        problemDescription: form.problemDescription.trim()
+        problemDescription: fullProblemDescription.length >= 10 ? fullProblemDescription : `${fullProblemDescription} (Detailed request)`,
+        serviceAddress: formattedAddress.length > 0 ? formattedAddress : 'Customer Default Address',
+        preferredDate: new Date(form.preferredDate).toISOString(),
+        notes: notesParts.length > 0 ? notesParts.join(' | ') : null
       }
-      const result = await createServiceRequest(data)
+
+      const result = await createServiceRequest(payload)
       setNewRequest(result)
       setSubmitted(true)
     } catch (err) {
       console.error('Failed to submit request:', err)
-      setErrors({ submit: 'Failed to submit service request. Please try again.' })
+      const message = err.response?.data?.message || err.response?.data?.title || 'Failed to submit service request. Please check required fields.'
+      setErrors({ submit: message })
     } finally {
       setSubmitting(false)
     }
@@ -128,7 +138,7 @@ function NewRequestPage() {
           </div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>Request Submitted Successfully!</h2>
           <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Your request <strong>{newRequest?.requestNumber || 'SR-0001'}</strong> has been created.
+            Your service request has been created and saved to the system.
           </p>
           <p style={{ color: 'var(--color-text-tertiary)', fontSize: '0.85rem', marginBottom: 24 }}>
             Our operations team will review your request shortly and assign an expert technician.
@@ -231,7 +241,7 @@ function NewRequestPage() {
                     <option value="">-- Select Address --</option>
                     {addresses.map(addr => (
                       <option key={addr.id} value={addr.id}>
-                        {addr.label || addr.addressTitle}: {addr.addressLine || addr.addressLine1}, {addr.city}
+                        {addr.addressLine1 || addr.addressLine}, {addr.city} ({addr.postalCode})
                       </option>
                     ))}
                   </select>
@@ -250,7 +260,7 @@ function NewRequestPage() {
                   <option value="">None / Not Applicable</option>
                   {assets.map(asset => (
                     <option key={asset.id} value={asset.id}>
-                      {asset.name} ({asset.brand} {asset.model ? `· ${asset.model}` : ''})
+                      {asset.assetName || asset.name} ({asset.category || asset.brand || 'Asset'} {asset.modelNumber ? `· ${asset.modelNumber}` : ''})
                     </option>
                   ))}
                 </select>
@@ -282,28 +292,20 @@ function NewRequestPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label form-label--required">Preferred Time Slot</label>
+                <label className="form-label">Preferred Time Slot (Optional)</label>
                 <select
-                  className={`form-select ${errors.preferredTime ? 'form-select--error' : ''}`}
+                  className="form-select"
                   value={form.preferredTime}
-                  onChange={e => {
-                    setForm(f => ({ ...f, preferredTime: e.target.value }))
-                    if (errors.preferredTime) setErrors(err => ({ ...err, preferredTime: null }))
-                  }}
+                  onChange={e => setForm(f => ({ ...f, preferredTime: e.target.value }))}
                 >
                   <option value="">-- Select Time Slot --</option>
                   <option value="09:00 AM - 10:00 AM">9:00 AM - 10:00 AM</option>
                   <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
-                  <option value="10:30 AM - 11:30 AM">10:30 AM - 11:30 AM</option>
                   <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
                   <option value="12:00 PM - 01:00 PM">12:00 PM - 1:00 PM</option>
-                  <option value="01:00 PM - 02:00 PM">1:00 PM - 2:00 PM</option>
                   <option value="02:00 PM - 03:00 PM">2:00 PM - 3:00 PM</option>
-                  <option value="03:00 PM - 04:00 PM">3:00 PM - 4:00 PM</option>
                   <option value="04:00 PM - 05:00 PM">4:00 PM - 5:00 PM</option>
-                  <option value="05:00 PM - 06:00 PM">5:00 PM - 6:00 PM</option>
                 </select>
-                {errors.preferredTime && <span className="form-error">{errors.preferredTime}</span>}
               </div>
             </div>
           </div>
@@ -331,7 +333,7 @@ function NewRequestPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label form-label--required">Detailed Problem Description</label>
+                <label className="form-label">Detailed Problem Description</label>
                 <textarea
                   className={`form-textarea ${errors.problemDescription ? 'form-textarea--error' : ''}`}
                   value={form.problemDescription}
@@ -339,7 +341,7 @@ function NewRequestPage() {
                     setForm(f => ({ ...f, problemDescription: e.target.value }))
                     if (errors.problemDescription) setErrors(err => ({ ...err, problemDescription: null }))
                   }}
-                  placeholder="Please describe the symptoms, error codes, or specific issues you are facing..."
+                  placeholder="Please describe symptoms, error codes, or specific issues..."
                   rows={4}
                 />
                 {errors.problemDescription && <span className="form-error">{errors.problemDescription}</span>}
@@ -373,14 +375,14 @@ function NewRequestPage() {
               <div className="summary-item">
                 <span className="summary-item__label">Address</span>
                 <span className="summary-item__value">
-                  {selectedAddress ? `${selectedAddress.label || selectedAddress.addressTitle} (${selectedAddress.city})` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
+                  {selectedAddress ? `${selectedAddress.addressLine1 || selectedAddress.addressLine} (${selectedAddress.city})` : <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
                 </span>
               </div>
 
               <div className="summary-item">
                 <span className="summary-item__label">Equipment</span>
                 <span className="summary-item__value">
-                  {selectedAsset ? selectedAsset.name : 'None'}
+                  {selectedAsset ? (selectedAsset.assetName || selectedAsset.name) : 'None'}
                 </span>
               </div>
 
@@ -388,13 +390,6 @@ function NewRequestPage() {
                 <span className="summary-item__label">Preferred Date</span>
                 <span className="summary-item__value">
                   {form.preferredDate || <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
-                </span>
-              </div>
-
-              <div className="summary-item">
-                <span className="summary-item__label">Preferred Time</span>
-                <span className="summary-item__value">
-                  {form.preferredTime || <em style={{ color: 'var(--color-text-tertiary)' }}>Not selected</em>}
                 </span>
               </div>
             </div>

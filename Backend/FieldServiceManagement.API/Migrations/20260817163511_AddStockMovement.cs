@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace FieldServiceManagement.API.Migrations
 {
-    /// <inheritdoc />
+
     public partial class AddStockMovement : Migration
     {
-        /// <inheritdoc />
+
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -51,7 +51,7 @@ namespace FieldServiceManagement.API.Migrations
                 column: "UserId");
         }
 
-        /// <inheritdoc />
+
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

@@ -37,7 +37,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // CREATE ADDRESS
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateCustomerAddressDto dto)
@@ -98,7 +97,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // GET MY ADDRESSES
     [HttpGet("my")]
     public async Task<IActionResult> GetMyAddresses()
     {
@@ -128,7 +126,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // GET ONE ADDRESS
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -179,7 +176,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // UPDATE ADDRESS
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
@@ -252,7 +248,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // DELETE ADDRESS
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -302,7 +297,6 @@ public class CustomerAddressesController : ControllerBase
     }
 
 
-    // GET CURRENT USER ID FROM JWT
     private int? GetCurrentUserId()
     {
         var claim =

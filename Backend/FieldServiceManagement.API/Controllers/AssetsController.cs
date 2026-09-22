@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FieldServiceManagement.API.DTOs.Assets;
 using FieldServiceManagement.API.Services;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,14 +13,19 @@ namespace FieldServiceManagement.API.Controllers;
 public class AssetsController : ControllerBase
 {
     private readonly AssetService _service;
+    private readonly IValidator<CreateAssetDto> _createValidator;
+    private readonly IValidator<UpdateAssetDto> _updateValidator;
 
-    public AssetsController(AssetService service)
+    public AssetsController(
+        AssetService service,
+        IValidator<CreateAssetDto> createValidator,
+        IValidator<UpdateAssetDto> updateValidator)
     {
         _service = service;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
     }
 
-    // GET: api/assets
-    // Get all assets belonging to the logged-in customer
     [HttpGet]
     public async Task<IActionResult> GetMyAssets()
     {
@@ -44,8 +50,6 @@ public class AssetsController : ControllerBase
         });
     }
 
-    // GET: api/assets/{id}
-    // Get one asset belonging to the logged-in customer
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -80,19 +84,18 @@ public class AssetsController : ControllerBase
         });
     }
 
-    // POST: api/assets
-    // Create an asset for the logged-in customer
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateAssetDto dto)
     {
-        if (!ModelState.IsValid)
+        var validationResult = await _createValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Invalid asset data.",
-                errors = ModelState
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
             });
         }
 
@@ -127,20 +130,19 @@ public class AssetsController : ControllerBase
         });
     }
 
-    // PUT: api/assets/{id}
-    // Update an asset belonging to the logged-in customer
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(
         int id,
         [FromBody] UpdateAssetDto dto)
     {
-        if (!ModelState.IsValid)
+        var validationResult = await _updateValidator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Invalid asset data.",
-                errors = ModelState
+                message = "Validation failed.",
+                errors = validationResult.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage })
             });
         }
 
@@ -176,8 +178,6 @@ public class AssetsController : ControllerBase
         });
     }
 
-    // DELETE: api/assets/{id}
-    // Delete an asset that has not been used by a service request
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -212,7 +212,6 @@ public class AssetsController : ControllerBase
         });
     }
 
-    // Get logged-in user's ID from JWT
     private int? GetUserId()
     {
         var userIdValue =

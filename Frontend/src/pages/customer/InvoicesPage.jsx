@@ -26,16 +26,34 @@ function InvoicesPage() {
   useEffect(() => {
     async function load() {
       setIsLoading(true)
-      const data = await getCustomerInvoices(user.id)
-      setInvoices(data)
-      setIsLoading(false)
+      try {
+        const data = await getCustomerInvoices(user?.id)
+        setInvoices(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Failed to load invoices:', err)
+        setInvoices([])
+      } finally {
+        setIsLoading(false)
+      }
     }
     if (user?.id) load()
+    else setIsLoading(false)
   }, [user?.id])
 
   const filtered = invoices.filter(inv => {
-    const matchesSearch = search === '' || inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) || inv.serviceName.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === 'All' || inv.status === statusFilter
+    const invNum = (inv.invoiceNumber || '').toLowerCase()
+    const sName = (inv.serviceName || '').toLowerCase()
+    const query = search.toLowerCase()
+    const matchesSearch = !search || invNum.includes(query) || sName.includes(query)
+    
+    let matchesStatus = true
+    if (statusFilter !== 'All') {
+      if (statusFilter === 'Pending' || statusFilter === 'Unpaid') {
+        matchesStatus = inv.status === 'Pending' || inv.status === 'Unpaid' || inv.status === 'Sent'
+      } else {
+        matchesStatus = inv.status === statusFilter
+      }
+    }
     return matchesSearch && matchesStatus
   })
 
@@ -53,18 +71,37 @@ function InvoicesPage() {
       <div className="filters-bar">
         <div className="filters-bar__search">
           <Search size={16} className="filters-bar__search-icon" />
-          <input className="filters-bar__search-input" placeholder="Search invoices..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input 
+            className="filters-bar__search-input" 
+            placeholder="Search invoices..." 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+          />
         </div>
         <select className="form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="All">All Statuses</option>
-          <option value="Pending">Pending</option>
+          <option value="Pending">Unpaid / Pending</option>
           <option value="Paid">Paid</option>
-          <option value="Overdue">Overdue</option>
+          <option value="Cancelled">Cancelled</option>
         </select>
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState icon={Receipt} title="No invoices found" message={search || statusFilter !== 'All' ? 'Try adjusting your filters.' : 'No invoices have been generated yet.'} />
+        <EmptyState 
+          icon={Receipt} 
+          title={invoices.length === 0 ? "No Invoices Available" : "No invoices found"} 
+          message={
+            invoices.length === 0 
+              ? "You don't have any service invoices yet. Invoices will appear here once your service requests are completed and billed." 
+              : "No invoices match your selected filter criteria."
+          }
+          actionLabel={invoices.length === 0 ? "View Service Requests" : "Clear Filters"}
+          onAction={
+            invoices.length === 0 
+              ? () => navigate('/customer/requests') 
+              : () => { setSearch(''); setStatusFilter('All'); }
+          }
+        />
       ) : (
         <div className="data-table-wrap">
           <table className="data-table">
@@ -72,7 +109,7 @@ function InvoicesPage() {
               <tr>
                 <th>Invoice #</th>
                 <th>Service</th>
-                <th>Request</th>
+                <th>Request ID</th>
                 <th>Date</th>
                 <th>Amount</th>
                 <th>Status</th>
@@ -83,11 +120,13 @@ function InvoicesPage() {
               {filtered.map(inv => (
                 <tr key={inv.id}>
                   <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{inv.invoiceNumber}</td>
-                  <td>{inv.serviceName}</td>
-                  <td style={{ color: 'var(--color-text-tertiary)' }}>{inv.requestNumber}</td>
+                  <td>{inv.serviceName || 'Service'}</td>
+                  <td style={{ color: 'var(--color-text-tertiary)', fontWeight: 500 }}>
+                    {inv.requestNumber || (inv.serviceRequestId ? `SR-${String(inv.serviceRequestId).padStart(4, '0')}` : 'N/A')}
+                  </td>
                   <td>{formatDate(inv.issuedAt)}</td>
                   <td style={{ fontWeight: 600 }}>{formatCurrency(inv.totalAmount)}</td>
-                  <td><StatusBadge status={invoiceStatusMap[inv.status] || inv.status} /></td>
+                  <td><StatusBadge status={inv.status} /></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <button

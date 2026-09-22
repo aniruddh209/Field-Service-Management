@@ -161,7 +161,7 @@ function CustomerDashboard() {
               </div>
             </div>
             <p className="customer-summary-card__value">
-              {upcomingAppointment ? formatDate(upcomingAppointment.date) : 'None'}
+              {upcomingAppointment ? formatDate(upcomingAppointment.date) : '-'}
             </p>
             <span className="customer-summary-card__subtext">
               {upcomingAppointment ? `${upcomingAppointment.time} · ${upcomingAppointment.serviceName}` : 'No scheduled jobs'}

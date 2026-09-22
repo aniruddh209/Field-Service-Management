@@ -14,12 +14,12 @@ public class Program
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-        
+
 
         builder.Services.AddControllers();
         builder.Services.AddValidatorsFromAssemblyContaining<Program>();
-        
-        
+
+
         builder.Services.AddScoped<AuthService>();
         builder.Services.AddScoped<JwtService>();
         builder.Services.AddScoped<TechnicianService>();
@@ -29,8 +29,9 @@ public class Program
         builder.Services.AddScoped<CustomerAddressService>();
         builder.Services.AddScoped<InventoryService>();
         builder.Services.AddScoped<StockMovementService>();
-        
-        
+        builder.Services.AddScoped<NotificationService>();
+
+
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -51,13 +52,13 @@ public class Program
             });
         builder.Services.AddAuthorization();
 
-        // Register Entity Framework Core with SQL Server
+
         builder.Services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
                 builder.Configuration.GetConnectionString("DefaultConnection")
             ));
-        
-        
+
+
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowReact", policy =>
@@ -68,12 +69,12 @@ public class Program
                     .AllowAnyMethod();
             });
         });
-        
+
         builder.Services.AddOpenApi();
 
         var app = builder.Build();
 
-        // HTTP request Things.
+
         if (app.Environment.IsDevelopment())
         {
             app.MapScalarApiReference();
@@ -84,7 +85,7 @@ public class Program
         app.UseCors("AllowReact");
         app.UseAuthentication();
         app.UseAuthorization();
-        
+
         app.MapControllers();
 
         app.Run();

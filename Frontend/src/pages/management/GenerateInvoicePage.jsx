@@ -58,53 +58,63 @@ function GenerateInvoicePage() {
     async function init() {
       setIsLoading(true)
       
-      // Load all requests and invoices to find eligible completed orders
-      const [allReqs, allInvs] = await Promise.all([
-        getAllServiceRequests(),
-        getAllInvoices()
-      ])
+      try {
+        const [allReqs, allInvs] = await Promise.all([
+          getAllServiceRequests().catch(() => []),
+          getAllInvoices().catch(() => [])
+        ])
 
-      // Find requests that are Completed and report is approved
-      const eligibleList = []
-      for (const r of allReqs) {
-        if (r.status === 'Completed' || r.status === 'WorkCompleted') {
-          // Check if report is approved
-          const report = await getWorkReportByRequestId(r.id)
-          if (report && report.reviewStatus === 'Approved') {
-            // Check if already invoiced
-            const alreadyInvoiced = allInvs.find(i => i.serviceRequestId === r.id)
-            if (!alreadyInvoiced) {
-              eligibleList.push({ request: r, report })
+        const reqsList = Array.isArray(allReqs) ? allReqs : []
+        const invsList = Array.isArray(allInvs) ? allInvs : []
+
+        // Find requests that are Completed and report is approved
+        const eligibleList = []
+        for (const r of reqsList) {
+          if (r.status === 'Completed' || r.status === 'WorkCompleted' || r.status === 'Invoiced') {
+            const report = await getWorkReportByRequestId(r.id).catch(() => null)
+            const isApproved = report && (report.reviewStatus === 'Approved' || report.managerReviewStatus === 'Approved')
+            if (isApproved) {
+              const alreadyInvoiced = invsList.find(i => i.serviceRequestId === r.id)
+              if (!alreadyInvoiced) {
+                eligibleList.push({ request: r, report })
+              }
             }
           }
         }
-      }
-      setEligibleRequests(eligibleList)
+        setEligibleRequests(eligibleList)
 
-      // If requestId is passed in query, load it automatically
-      if (requestIdParam) {
-        const reqId = Number(requestIdParam)
-        
-        // Check for duplicate invoice first
-        const existingInvoice = allInvs.find(i => i.serviceRequestId === reqId)
-        if (existingInvoice) {
-          setDuplicateInvoiceId(existingInvoice.id)
-          setIsLoading(false)
-          return
-        }
+        // If requestId is passed in query, load it automatically
+        if (requestIdParam) {
+          const reqId = Number(requestIdParam)
+          
+          // Check for duplicate invoice first
+          const existingInvoice = invsList.find(i => i.serviceRequestId === reqId)
+          if (existingInvoice) {
+            setDuplicateInvoiceId(existingInvoice.id)
+            setIsLoading(false)
+            return
+          }
 
-        const reqData = await getServiceRequestById(reqId)
-        const reportData = await getWorkReportByRequestId(reqId)
-        if (reqData && reportData && reportData.reviewStatus === 'Approved') {
-          setSelectedRequest(reqData)
-          setSelectedReport(reportData)
-          initializeForm(reqData, reportData)
-          setStep(2)
-        } else {
-          setIsError(true)
+          const reqData = await getServiceRequestById(reqId).catch(() => null)
+          const reportData = await getWorkReportByRequestId(reqId).catch(() => null)
+          const isReportApproved = reportData && (reportData.reviewStatus === 'Approved' || reportData.managerReviewStatus === 'Approved')
+          
+          if (reqData && (reportData ? isReportApproved : true)) {
+            const finalReport = reportData || { suggestedLabourCharge: 500, partsUsed: [] }
+            setSelectedRequest(reqData)
+            setSelectedReport(finalReport)
+            initializeForm(reqData, finalReport)
+            setStep(2)
+          } else {
+            setIsError(true)
+          }
         }
+      } catch (err) {
+        console.error('Error initializing generate invoice page:', err)
+        setIsError(true)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
     init()
   }, [requestIdParam])
@@ -199,39 +209,27 @@ function GenerateInvoicePage() {
 
   const handleSaveInvoice = async (invoiceStatus) => {
     try {
-      // 1. Save invoice in invoiceService
+      setIsLoading(true)
       const invoicePayload = {
         serviceRequestId: selectedRequest.id,
-        requestNumber: selectedRequest.requestNumber,
-        customerId: selectedRequest.customerId,
-        customerName: selectedRequest.customerName,
-        serviceName: selectedRequest.serviceName,
-        serviceAmount: totals.subtotal, // base charges sum
-        partsAmount: totals.partsTotal,
-        taxAmount: totals.taxAmount,
-        totalAmount: totals.grandTotal,
-        status: invoiceStatus === 'Draft' ? 'Draft' : 'Pending', // pending payment
         serviceCharge: form.serviceCharge,
         labourCharge: form.labourCharge,
-        parts: form.parts,
-        additionalCharges: form.additionalCharges,
-        discountType: form.discountType,
-        discountValue: form.discountValue,
-        discountAmount: totals.discountAmount,
-        taxPercentage: form.taxPercentage,
-        warrantyDays: form.warrantyIncluded === 'Yes' ? form.warrantyDays : 0,
-        warrantyNotes: form.warrantyIncluded === 'Yes' ? form.warrantyNotes : '',
+        taxAmount: totals.taxAmount,
         notes: form.notes
       }
 
       const invoice = await createInvoice(invoicePayload)
 
-      // 2. Advance request status to Invoiced in serviceRequestService
-      await markAsInvoiced(selectedRequest.id, invoice.invoiceNumber, user.id)
+      if (selectedRequest?.id) {
+        await markAsInvoiced(selectedRequest.id, invoice?.invoiceNumber || 'INV', user?.id).catch(() => {})
+      }
 
       navigate('/management/invoices')
     } catch (err) {
-      console.error(err)
+      console.error('Error creating invoice:', err)
+      alert(err.response?.data?.message || 'Failed to generate invoice. Ensure work report is approved.')
+    } finally {
+      setIsLoading(false)
     }
   }
 

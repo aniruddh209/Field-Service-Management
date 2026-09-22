@@ -157,16 +157,15 @@ function InvoiceDetailsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, fontSize: '0.88rem', marginBottom: 24 }}>
             <div>
               <p style={{ fontWeight: 600, color: 'var(--color-text-tertiary)', margin: '0 0 4px 0', textTransform: 'uppercase', fontSize: '0.75rem' }}>Bill To</p>
-              <p style={{ fontWeight: 700, margin: '0 0 2px 0' }}>{invoice.customerName}</p>
-              <p style={{ margin: '0 0 2px 0', color: 'var(--color-text-secondary)' }}>arjun.mehta@example.com</p>
-              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Kalawad Road, Rajkot</p>
+              <p style={{ fontWeight: 700, margin: '0 0 2px 0' }}>{invoice.customerName || 'Customer'}</p>
+              <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>Field Service Customer</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontWeight: 600, color: 'var(--color-text-tertiary)', margin: '0 0 4px 0', textTransform: 'uppercase', fontSize: '0.75rem' }}>Details</p>
-              <p style={{ margin: '0 0 2px 0' }}>Request ID: <strong>{invoice.requestNumber}</strong></p>
-              <p style={{ margin: '0 0 2px 0' }}>Service: {invoice.serviceName}</p>
+              <p style={{ margin: '0 0 2px 0' }}>Request ID: <strong>{invoice.requestNumber || (invoice.serviceRequestId ? `SR-${String(invoice.serviceRequestId).padStart(4, '0')}` : 'N/A')}</strong></p>
+              <p style={{ margin: '0 0 2px 0' }}>Service: {invoice.serviceName || 'Service'}</p>
               <p style={{ margin: '0 0 2px 0' }}>Issued: {formatDate(invoice.issuedAt)}</p>
-              <p style={{ margin: 0 }}>Due Date: <strong>{formatDate(invoice.dueDate)}</strong></p>
+              <p style={{ margin: 0 }}>Due Date: <strong>{formatDate(invoice.dueDate || (invoice.issuedAt ? new Date(new Date(invoice.issuedAt).getTime() + 7*24*60*60*1000).toISOString() : null))}</strong></p>
             </div>
           </div>
 
@@ -184,36 +183,27 @@ function InvoiceDetailsPage() {
               <tbody>
                 {/* Service fee */}
                 <tr>
-                  <td>{invoice.serviceName} Base Service Fee</td>
+                  <td>{invoice.serviceName || 'Base'} Service Fee</td>
                   <td>1</td>
-                  <td>{formatCurrency(invoice.serviceCharge || invoice.serviceAmount - (invoice.labourCharge || 0))}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.serviceCharge || invoice.serviceAmount - (invoice.labourCharge || 0))}</td>
+                  <td>{formatCurrency(invoice.serviceAmount ?? 500)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.serviceAmount ?? 500)}</td>
                 </tr>
                 {/* Labour */}
-                {(invoice.labourCharge > 0 || (invoice.serviceAmount - (invoice.serviceCharge || 500) > 0)) && (
+                {(invoice.labourCharge > 0) && (
                   <tr>
                     <td>Service Labour Operations</td>
                     <td>1</td>
-                    <td>{formatCurrency(invoice.labourCharge || invoice.serviceAmount - 500)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.labourCharge || invoice.serviceAmount - 500)}</td>
+                    <td>{formatCurrency(invoice.labourCharge)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(invoice.labourCharge)}</td>
                   </tr>
                 )}
-                {/* Parts */}
-                {(invoice.parts || []).map((p, idx) => (
+                {/* Items / Parts */}
+                {(invoice.items || invoice.parts || []).map((p, idx) => (
                   <tr key={idx}>
-                    <td>{p.partName || p.name}</td>
-                    <td>{p.quantity}</td>
-                    <td>{formatCurrency(p.unitPrice)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(p.quantity * p.unitPrice)}</td>
-                  </tr>
-                ))}
-                {/* Additional */}
-                {(invoice.additionalCharges || []).map((c, idx) => (
-                  <tr key={idx}>
-                    <td>{c.description}</td>
-                    <td>1</td>
-                    <td>{formatCurrency(c.amount)}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(c.amount)}</td>
+                    <td>{p.itemName || p.partName || p.name || 'Inventory Item'}</td>
+                    <td>{p.quantity || 1}</td>
+                    <td>{formatCurrency(p.unitPrice || 0)}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(p.totalPrice || (p.quantity || 1) * (p.unitPrice || 0))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -225,38 +215,22 @@ function InvoiceDetailsPage() {
             <div style={{ width: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--color-text-secondary)' }}>Subtotal:</span>
-                <span>{formatCurrency(invoice.serviceAmount + (invoice.partsAmount || 0))}</span>
+                <span>{formatCurrency(invoice.subTotal || ((invoice.serviceAmount ?? 500) + (invoice.labourCharge || 0) + (invoice.partsAmount || 0)))}</span>
               </div>
-              {invoice.discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-danger)' }}>
-                  <span>Discount:</span>
-                  <span>- {formatCurrency(invoice.discountAmount)}</span>
-                </div>
-              )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--color-text-secondary)' }}>Tax (GST):</span>
-                <span>{formatCurrency(invoice.taxAmount)}</span>
+                <span>{formatCurrency(invoice.taxAmount || 0)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 700, borderTop: '2px solid var(--color-border)', paddingTop: 8, color: 'var(--color-primary)' }}>
                 <span>Grand Total:</span>
-                <span>{formatCurrency(invoice.totalAmount)}</span>
+                <span>{formatCurrency(invoice.totalAmount || 0)}</span>
               </div>
             </div>
           </div>
 
-          {/* Warranty details */}
-          {invoice.warrantyDays > 0 && (
-            <div style={{ background: 'var(--color-surface-secondary)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)', marginBottom: 20, fontSize: '0.82rem' }}>
-              <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <ShieldCheck size={16} /> Warranty Cover Included
-              </p>
-              <p style={{ margin: 0 }}>Period: <strong>{invoice.warrantyDays} Days</strong>. Notes: {invoice.warrantyNotes || 'Covers parts replaced.'}</p>
-            </div>
-          )}
-
           <div style={{ fontSize: '0.82rem', color: 'var(--color-text-tertiary)', borderTop: '1px solid var(--color-border-light)', paddingTop: 12 }}>
             <p style={{ margin: '0 0 4px 0' }}>Notes: {invoice.notes || 'Thank you for choosing Field Service.'}</p>
-            <p style={{ margin: 0 }}>Due Date: {formatDate(invoice.dueDate)}</p>
+            <p style={{ margin: 0 }}>Due Date: {formatDate(invoice.dueDate || (invoice.issuedAt ? new Date(new Date(invoice.issuedAt).getTime() + 7*24*60*60*1000).toISOString() : null))}</p>
           </div>
 
         </div>

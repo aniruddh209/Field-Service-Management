@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Calendar as CalendarIcon, Clock, ClipboardList, MapPin } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getTechnicianByUserId } from '../../services/technicianService.js'
 import { getTechnicianSchedule } from '../../services/scheduleService.js'
 import { formatDate } from '../../utils/format.js'
 import StatusBadge from '../../components/ui/StatusBadge.jsx'
@@ -9,21 +9,24 @@ import { LoadingState } from '../../components/ui/PageStates.jsx'
 import PageContainer from '../../components/layout/PageContainer.jsx'
 
 function TechnicianSchedulePage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [schedule, setSchedule] = useState({ today: [], upcoming: [] })
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('today') // 'today' | 'upcoming'
+  const [activeTab, setActiveTab] = useState('today')
 
   useEffect(() => {
     async function load() {
       if (!user?.id) return
       setIsLoading(true)
-      const tech = await getTechnicianByUserId(user.id)
-      if (tech) {
-        const data = await getTechnicianSchedule(tech.id)
+      try {
+        const data = await getTechnicianSchedule()
         setSchedule(data)
+      } catch (err) {
+        console.error("Error loading schedule:", err)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
     load()
   }, [user])
@@ -41,7 +44,6 @@ function TechnicianSchedulePage() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: 12, borderBottom: '1px solid var(--color-border)', marginBottom: 20 }}>
         <button
           className="btn btn--sm"
@@ -67,11 +69,10 @@ function TechnicianSchedulePage() {
           }}
           onClick={() => setActiveTab('upcoming')}
         >
-          Upcoming Appointments ({schedule.upcoming.length})
+          Upcoming / Other Jobs ({schedule.upcoming.length})
         </button>
       </div>
 
-      {/* Schedule list */}
       {displayedJobs.length === 0 ? (
         <div className="page-state page-state--empty">
           <CalendarIcon size={40} className="page-state__icon" />
@@ -81,7 +82,7 @@ function TechnicianSchedulePage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {displayedJobs.map(job => (
-            <div key={job.id} className="data-card">
+            <div key={job.id} className="data-card" style={{ cursor: 'pointer' }} onClick={() => navigate(`/technician/jobs/${job.id}`)}>
               <div className="data-card__header" style={{ alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <div style={{
@@ -92,9 +93,9 @@ function TechnicianSchedulePage() {
                     <Clock size={18} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{job.service}</h3>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{job.service?.serviceName || `REQ-${job.id}`}</h3>
                     <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)' }}>
-                      {job.requestNumber} · {formatDate(job.date)} · {job.time}
+                      REQ-{job.id} · {formatDate(job.preferredDate)}
                     </p>
                   </div>
                 </div>
@@ -103,11 +104,11 @@ function TechnicianSchedulePage() {
               <div className="data-card__body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
                   <ClipboardList size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>Customer: <strong>{job.customer}</strong></span>
+                  <span>Customer: <strong>{job.customer?.firstName} {job.customer?.lastName}</strong></span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
                   <MapPin size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-                  <span>Location: <strong>{job.addressShortText}</strong></span>
+                  <span>Location: <strong>{job.serviceAddress}</strong></span>
                 </div>
               </div>
             </div>

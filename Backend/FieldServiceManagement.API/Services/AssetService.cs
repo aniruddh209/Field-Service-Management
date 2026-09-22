@@ -14,7 +14,7 @@ public class AssetService
         _context = context;
     }
 
-    // CUSTOMER - GET OWN ASSETS
+
     public async Task<List<AssetDto>> GetMyAssetsAsync(int userId)
     {
         var assets = await _context.Assets
@@ -28,7 +28,7 @@ public class AssetService
             .ToList();
     }
 
-    // CUSTOMER - GET OWN ASSET BY ID
+
     public async Task<AssetDto?> GetByIdAsync(
         int assetId,
         int userId)
@@ -45,7 +45,7 @@ public class AssetService
         return MapToDto(asset);
     }
 
-    // CUSTOMER - CREATE ASSET
+
     public async Task<bool> CreateAsync(
         int userId,
         CreateAssetDto dto)
@@ -91,7 +91,7 @@ public class AssetService
         return true;
     }
 
-    // CUSTOMER - UPDATE OWN ASSET
+
     public async Task<bool> UpdateAsync(
         int assetId,
         int userId,
@@ -130,7 +130,7 @@ public class AssetService
         return true;
     }
 
-    // CUSTOMER - DELETE OWN ASSET
+
     public async Task<bool> DeleteAsync(
         int assetId,
         int userId)
@@ -157,7 +157,7 @@ public class AssetService
         return true;
     }
 
-    // MAPPING
+
     private static AssetDto MapToDto(Asset asset)
     {
         return new AssetDto

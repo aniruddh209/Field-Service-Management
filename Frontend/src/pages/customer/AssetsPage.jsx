@@ -231,9 +231,20 @@ function AssetsPage() {
       {/* Add/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => !submitting && setShowModal(false)}
         title={editingId ? "Edit Asset" : "Add Asset"}
       >
+        {apiError && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            color: '#ef4444', backgroundColor: '#fef2f2', padding: '10px 14px',
+            borderRadius: '6px', fontSize: '13px', marginBottom: '16px', border: '1px solid #fca5a5'
+          }}>
+            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <span>{apiError}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label form-label--required">Equipment Name</label>

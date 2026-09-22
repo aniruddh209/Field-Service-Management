@@ -9,16 +9,16 @@ namespace FieldServiceManagement.API.Services;
 public class InventoryService
 {
     private readonly AppDbContext _context;
+    private readonly NotificationService _notificationService;
 
-    public InventoryService(AppDbContext context)
+    public InventoryService(
+        AppDbContext context,
+        NotificationService notificationService)
     {
         _context = context;
+        _notificationService = notificationService;
     }
 
-
-    // =========================================================
-    // GET ALL INVENTORY ITEMS
-    // =========================================================
 
     public async Task<List<InventoryItemDto>> GetAllAsync()
     {
@@ -33,10 +33,6 @@ public class InventoryService
     }
 
 
-    // =========================================================
-    // GET INVENTORY ITEM BY ID
-    // =========================================================
-
     public async Task<InventoryItemDto?> GetByIdAsync(int id)
     {
         var item = await _context.InventoryItems
@@ -50,10 +46,6 @@ public class InventoryService
     }
 
 
-    // =========================================================
-    // CREATE INVENTORY ITEM
-    // =========================================================
-
     public async Task<bool> CreateAsync(
         int userId,
         CreateInventoryItemDto dto)
@@ -66,7 +58,7 @@ public class InventoryService
         {
             var sku = dto.SKU.Trim();
 
-            // SKU must be unique
+
             var existingItem = await _context.InventoryItems
                 .AnyAsync(i => i.SKU == sku);
 
@@ -96,8 +88,7 @@ public class InventoryService
 
                 IsActive = true,
 
-                CreatedAt =
-                    DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow
             };
 
 
@@ -106,7 +97,6 @@ public class InventoryService
             await _context.SaveChangesAsync();
 
 
-            // Record initial stock in history
             if (item.QuantityInStock > 0)
             {
                 var movement = new StockMovement
@@ -138,6 +128,24 @@ public class InventoryService
 
             await transaction.CommitAsync();
 
+
+            await NotifyManagersAsync(
+                "New Inventory Item",
+                $"Inventory item '{item.Name}' ({item.SKU}) was added to inventory.",
+                "Inventory",
+                item.Id);
+
+
+            if (item.QuantityInStock <= item.ReorderLevel)
+            {
+                await NotifyManagersAsync(
+                    "Low Stock Alert",
+                    $"Inventory item '{item.Name}' ({item.SKU}) is at or below its reorder level. Current stock: {item.QuantityInStock}.",
+                    "Inventory",
+                    item.Id);
+            }
+
+
             return true;
         }
         catch
@@ -148,10 +156,6 @@ public class InventoryService
         }
     }
 
-
-    // =========================================================
-    // UPDATE INVENTORY ITEM
-    // =========================================================
 
     public async Task<bool> UpdateAsync(
         int id,
@@ -167,7 +171,6 @@ public class InventoryService
         var sku = dto.SKU.Trim();
 
 
-        // Check duplicate SKU
         var duplicateSku = await _context.InventoryItems
             .AnyAsync(i =>
                 i.SKU == sku &&
@@ -198,18 +201,11 @@ public class InventoryService
             DateTime.UtcNow;
 
 
-        // IMPORTANT:
-        // QuantityInStock is intentionally NOT changed here.
-
         await _context.SaveChangesAsync();
 
         return true;
     }
 
-
-    // =========================================================
-    // DEACTIVATE INVENTORY ITEM
-    // =========================================================
 
     public async Task<bool> DeactivateAsync(int id)
     {
@@ -232,13 +228,17 @@ public class InventoryService
 
         await _context.SaveChangesAsync();
 
+
+        await NotifyManagersAsync(
+            "Inventory Item Deactivated",
+            $"Inventory item '{item.Name}' ({item.SKU}) has been deactivated.",
+            "Inventory",
+            item.Id);
+
+
         return true;
     }
 
-
-    // =========================================================
-    // SEARCH INVENTORY
-    // =========================================================
 
     public async Task<List<InventoryItemDto>> SearchAsync(
         string name)
@@ -265,10 +265,6 @@ public class InventoryService
     }
 
 
-    // =========================================================
-    // GET LOW-STOCK ITEMS
-    // =========================================================
-
     public async Task<List<InventoryItemDto>> GetLowStockAsync()
     {
         var items = await _context.InventoryItems
@@ -285,10 +281,6 @@ public class InventoryService
             .ToList();
     }
 
-
-    // =========================================================
-    // ADJUST STOCK
-    // =========================================================
 
     public async Task<bool> AdjustStockAsync(
         int inventoryItemId,
@@ -310,17 +302,19 @@ public class InventoryService
                 return false;
 
 
-            // A stock adjustment of zero does nothing
             if (dto.QuantityChange == 0)
                 return false;
 
 
+            var oldQuantity =
+                item.QuantityInStock;
+
+
             var newQuantity =
-                item.QuantityInStock +
+                oldQuantity +
                 dto.QuantityChange;
 
 
-            // Stock can never become negative
             if (newQuantity < 0)
                 return false;
 
@@ -363,6 +357,33 @@ public class InventoryService
 
             await transaction.CommitAsync();
 
+
+            var adjustmentType =
+                dto.QuantityChange > 0
+                    ? "increased"
+                    : "decreased";
+
+            await NotifyManagersAsync(
+                "Inventory Stock Updated",
+                $"Stock for '{item.Name}' ({item.SKU}) was {adjustmentType}. Current stock: {newQuantity}.",
+                "Inventory",
+                item.Id);
+
+
+            var becameLowStock =
+                newQuantity <= item.ReorderLevel &&
+                oldQuantity > item.ReorderLevel;
+
+            if (becameLowStock)
+            {
+                await NotifyManagersAsync(
+                    "Low Stock Alert",
+                    $"Inventory item '{item.Name}' ({item.SKU}) is now low on stock. Current stock: {newQuantity}. Reorder level: {item.ReorderLevel}.",
+                    "Inventory",
+                    item.Id);
+            }
+
+
             return true;
         }
         catch
@@ -374,9 +395,42 @@ public class InventoryService
     }
 
 
-    // =========================================================
-    // MAPPING
-    // =========================================================
+    private async Task NotifyManagersAsync(
+        string title,
+        string message,
+        string relatedEntityType,
+        int relatedEntityId)
+    {
+        var users = await _context.Users
+            .Where(u =>
+                u.Role == "Owner" ||
+                u.Role == "Manager")
+            .Select(u => u.Id)
+            .ToListAsync();
+
+
+        foreach (var userId in users)
+        {
+            await _notificationService.CreateAsync(
+                new DTOs.Notifications.CreateNotificationDto
+                {
+                    UserId = userId,
+
+                    Title = title,
+
+                    Message = message,
+
+                    Type = "Inventory",
+
+                    RelatedEntityType =
+                        relatedEntityType,
+
+                    RelatedEntityId =
+                        relatedEntityId
+                });
+        }
+    }
+
 
     private static InventoryItemDto MapToDto(
         InventoryItem item)

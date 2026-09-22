@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Wrench, ArrowLeft, Users, Shield, Briefcase, UserCheck } from 'lucide-react'
+import { Wrench, ArrowLeft, Users, Shield, Briefcase, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import FormInput from '../../components/forms/FormInput.jsx'
 import PasswordInput from '../../components/forms/PasswordInput.jsx'
@@ -29,6 +29,7 @@ function RegisterPage() {
   })
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
   const [errors, setErrors] = useState({})
   const [apiError, setApiError] = useState('')
 
@@ -105,10 +106,19 @@ function RegisterPage() {
         role: form.role,
         password: form.password
       })
-      navigate('/login')
+
+      setIsSuccess(true)
+      setTimeout(() => {
+        navigate('/login', {
+          state: {
+            registeredEmail: form.email.trim(),
+            registeredRole: form.role,
+            successMessage: `Account created successfully for ${form.email.trim()}! Please sign in with your credentials.`
+          }
+        })
+      }, 900)
     } catch (err) {
       setApiError(err.message || 'Registration failed. Try again.')
-    } finally {
       setIsLoading(false)
     }
   }
@@ -134,6 +144,18 @@ function RegisterPage() {
         <p className="register-page__subtitle">
           Select your role and register to access Field Service Platform
         </p>
+
+        {isSuccess && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            color: '#15803d', backgroundColor: '#f0fdf4', padding: '12px 16px',
+            borderRadius: '8px', fontSize: '14px', marginBottom: '20px', border: '1px solid #bbf7d0',
+            fontWeight: 600
+          }}>
+            <CheckCircle2 size={20} style={{ flexShrink: 0, color: '#16a34a' }} />
+            <span>Registration successful! Redirecting you to sign in...</span>
+          </div>
+        )}
 
         {apiError && (
           <div style={{ color: '#ef4444', backgroundColor: '#fef2f2', padding: '10px 14px', borderRadius: '6px', fontSize: '14px', marginBottom: '16px', border: '1px solid #fca5a5' }}>
@@ -287,9 +309,9 @@ function RegisterPage() {
           <button
             type="submit"
             className="login-page__submit-btn"
-            disabled={isLoading}
+            disabled={isLoading || isSuccess}
           >
-            {isLoading ? 'Creating account...' : `Create ${form.role} Account`}
+            {isSuccess ? 'Registered! Redirecting...' : isLoading ? 'Creating account...' : `Create ${form.role} Account`}
           </button>
         </form>
 

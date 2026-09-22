@@ -1,4 +1,5 @@
 using FieldServiceManagement.API.Data;
+using FieldServiceManagement.API.DTOs.Notifications;
 using FieldServiceManagement.API.DTOs.Technicians;
 using FieldServiceManagement.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -8,11 +9,16 @@ namespace FieldServiceManagement.API.Services;
 public class TechnicianService
 {
     private readonly AppDbContext _context;
+    private readonly NotificationService _notificationService;
 
-    public TechnicianService(AppDbContext context)
+    public TechnicianService(
+        AppDbContext context,
+        NotificationService notificationService)
     {
         _context = context;
+        _notificationService = notificationService;
     }
+
 
     public async Task<List<TechnicianDto>> GetAllAsync()
     {
@@ -50,7 +56,7 @@ public class TechnicianService
         }).ToList();
     }
 
-    
+
     public async Task<TechnicianDto?> GetByIdAsync(int id)
     {
         var technician = await _context.Technicians
@@ -93,26 +99,25 @@ public class TechnicianService
     public async Task<bool> CreateAsync(
         CreateTechnicianDto dto)
     {
-
         var user = await _context.Users
             .FirstOrDefaultAsync(x => x.Id == dto.UserId);
 
         if (user == null)
             return false;
 
-
         if (user.Role != "Technician")
             return false;
 
-
         var codeExists = await _context.Technicians
-            .AnyAsync(x => x.EmployeeCode == dto.EmployeeCode);
+            .AnyAsync(x =>
+                x.EmployeeCode == dto.EmployeeCode);
 
         if (codeExists)
             return false;
-        
+
         var alreadyTechnician = await _context.Technicians
-            .AnyAsync(x => x.UserId == dto.UserId);
+            .AnyAsync(x =>
+                x.UserId == dto.UserId);
 
         if (alreadyTechnician)
             return false;
@@ -147,43 +152,88 @@ public class TechnicianService
 
         await _context.SaveChangesAsync();
 
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = user.Id,
+
+                Title = "Technician Profile Created",
+
+                Message =
+                    "Your technician profile has been successfully created.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
+
         return true;
     }
 
-    
+
     public async Task<bool> UpdateAsync(
         int id,
         UpdateTechnicianDto dto)
     {
         var technician = await _context.Technicians
+            .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (technician == null)
             return false;
 
-        technician.Specialization = dto.Specialization;
+        technician.Specialization =
+            dto.Specialization;
 
-        technician.ExperienceYears = dto.ExperienceYears;
+        technician.ExperienceYears =
+            dto.ExperienceYears;
 
-        technician.CurrentLocation = dto.CurrentLocation;
+        technician.CurrentLocation =
+            dto.CurrentLocation;
 
-        technician.Notes = dto.Notes;
+        technician.Notes =
+            dto.Notes;
 
-        technician.IsAvailable = dto.IsAvailable;
+        technician.IsAvailable =
+            dto.IsAvailable;
 
-        technician.IsActive = dto.IsActive;
+        technician.IsActive =
+            dto.IsActive;
 
-        technician.UpdatedAt = DateTime.UtcNow;
+        technician.UpdatedAt =
+            DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = technician.UserId,
+
+                Title = "Technician Profile Updated",
+
+                Message =
+                    "Your technician profile information has been updated.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
 
         return true;
     }
 
-    
+
     public async Task<bool> DeactivateAsync(int id)
     {
         var technician = await _context.Technicians
+            .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (technician == null)
@@ -198,23 +248,44 @@ public class TechnicianService
 
         technician.Status = "Inactive";
 
-        technician.UpdatedAt = DateTime.UtcNow;
+        technician.UpdatedAt =
+            DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = technician.UserId,
+
+                Title = "Technician Account Deactivated",
+
+                Message =
+                    "Your technician account has been deactivated.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
 
         return true;
     }
 
-    
+
     public async Task<bool> ToggleStatusAsync(int id)
     {
         var technician = await _context.Technicians
+            .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (technician == null)
             return false;
 
-        technician.IsActive = !technician.IsActive;
+        technician.IsActive =
+            !technician.IsActive;
 
         if (!technician.IsActive)
         {
@@ -227,24 +298,50 @@ public class TechnicianService
             technician.Status = "Available";
         }
 
-        technician.UpdatedAt = DateTime.UtcNow;
+        technician.UpdatedAt =
+            DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = technician.UserId,
+
+                Title = technician.IsActive
+                    ? "Technician Account Activated"
+                    : "Technician Account Deactivated",
+
+                Message = technician.IsActive
+                    ? "Your technician account has been activated and you are now available."
+                    : "Your technician account has been deactivated.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
 
         return true;
     }
 
-    
+
     public async Task<bool> ChangeWorkStatusAsync(
         int id,
         ChangeWorkStatusDto dto)
     {
         var technician = await _context.Technicians
+            .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (technician == null)
             return false;
 
+        if (!technician.IsActive)
+            return false;
+
         if (dto.Status != "Available" &&
             dto.Status != "Busy" &&
             dto.Status != "On Leave")
@@ -252,27 +349,51 @@ public class TechnicianService
             return false;
         }
 
-        technician.Status = dto.Status;
+        technician.Status =
+            dto.Status;
 
         technician.IsAvailable =
             dto.Status == "Available";
 
-        technician.UpdatedAt = DateTime.UtcNow;
+        technician.UpdatedAt =
+            DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = technician.UserId,
+
+                Title = "Work Status Updated",
+
+                Message =
+                    $"Your work status has been changed to {technician.Status}.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
 
         return true;
     }
 
-    
+
     public async Task<bool> ChangeMyStatusAsync(
         int userId,
         ChangeWorkStatusDto dto)
     {
         var technician = await _context.Technicians
-            .FirstOrDefaultAsync(t => t.UserId == userId);
+            .FirstOrDefaultAsync(t =>
+                t.UserId == userId);
 
         if (technician == null)
+            return false;
+
+        if (!technician.IsActive)
             return false;
 
         if (dto.Status != "Available" &&
@@ -282,19 +403,39 @@ public class TechnicianService
             return false;
         }
 
-        technician.Status = dto.Status;
+        technician.Status =
+            dto.Status;
 
         technician.IsAvailable =
             dto.Status == "Available";
 
-        technician.UpdatedAt = DateTime.UtcNow;
+        technician.UpdatedAt =
+            DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+
+        await _notificationService.CreateAsync(
+            new CreateNotificationDto
+            {
+                UserId = technician.UserId,
+
+                Title = "Work Status Updated",
+
+                Message =
+                    $"Your work status is now {technician.Status}.",
+
+                Type = "Technician",
+
+                RelatedEntityType = "Technician",
+
+                RelatedEntityId = technician.Id
+            });
 
         return true;
     }
 
-    
+
     public async Task<List<TechnicianDropdownDto>> GetDropdownAsync()
     {
         var technicians = await _context.Technicians
@@ -315,60 +456,83 @@ public class TechnicianService
 
         }).ToList();
     }
-    
-    
-    public async Task<List<TechnicianDto>> SearchAsync(string name)
+
+
+    public async Task<List<TechnicianDto>> SearchAsync(
+        string name)
     {
+        if (string.IsNullOrWhiteSpace(name))
+            return new List<TechnicianDto>();
+
+        var search = name.Trim();
+
         var technicians = await _context.Technicians
             .Include(t => t.User)
-            .Where(t => t.IsActive &&
-                        t.User.FullName.Contains(name))
+            .Where(t =>
+                t.IsActive &&
+                t.User.FullName.Contains(search))
             .ToListAsync();
 
         return technicians.Select(t => new TechnicianDto
         {
             Id = t.Id,
             UserId = t.UserId,
+
             FullName = t.User.FullName,
             Email = t.User.Email,
             PhoneNumber = t.User.PhoneNumber,
+
             EmployeeCode = t.EmployeeCode,
             Specialization = t.Specialization,
             ExperienceYears = t.ExperienceYears,
+
             Rating = t.Rating,
+
             TotalJobs = t.TotalJobs,
             ActiveJobs = t.ActiveJobs,
             CompletedJobs = t.CompletedJobs,
+
             IsAvailable = t.IsAvailable,
             IsActive = t.IsActive,
+
             Status = t.Status,
             CurrentLocation = t.CurrentLocation,
+
             JoiningDate = t.JoiningDate
+
         }).ToList();
     }
-    
-    //Dashboard
-    public async Task<TechnicianDashboardDto?> GetDashboardAsync(int userId)
+
+
+    public async Task<TechnicianDashboardDto?> GetDashboardAsync(
+        int userId)
     {
         var technician = await _context.Technicians
-            .FirstOrDefaultAsync(t => t.UserId == userId);
+            .FirstOrDefaultAsync(t =>
+                t.UserId == userId);
 
         if (technician == null)
             return null;
 
         return new TechnicianDashboardDto
         {
-            TotalJobs = technician.TotalJobs,
+            TotalJobs =
+                technician.TotalJobs,
 
-            ActiveJobs = technician.ActiveJobs,
+            ActiveJobs =
+                technician.ActiveJobs,
 
-            CompletedJobs = technician.CompletedJobs,
+            CompletedJobs =
+                technician.CompletedJobs,
 
-            IsAvailable = technician.IsAvailable,
+            IsAvailable =
+                technician.IsAvailable,
 
-            IsActive = technician.IsActive,
+            IsActive =
+                technician.IsActive,
 
-            Status = technician.Status
+            Status =
+                technician.Status
         };
     }
 }

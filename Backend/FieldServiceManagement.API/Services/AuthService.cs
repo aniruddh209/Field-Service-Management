@@ -16,7 +16,7 @@ public class AuthService
     private readonly AppDbContext _context;
 
     private readonly JwtService _jwtService;
-    
+
     private readonly IConfiguration _configuration;
     public AuthService(
         AppDbContext context,
@@ -27,10 +27,10 @@ public class AuthService
         _jwtService = jwtService;
         _configuration = configuration;
     }
-    
+
     public async Task<bool> RegisterAsync(RegisterUserDto dto)
     {
-        // Check email already exists
+
         var emailExists = await _context.Users
             .AnyAsync(u => u.Email == dto.Email);
 
@@ -39,7 +39,7 @@ public class AuthService
             return false;
         }
 
-        // Create User Entity
+
         var user = new User
         {
             FirstName = dto.FirstName,
@@ -58,7 +58,7 @@ public class AuthService
 
         return true;
     }
-    
+
     public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto dto)
     {
         var user = await _context.Users
