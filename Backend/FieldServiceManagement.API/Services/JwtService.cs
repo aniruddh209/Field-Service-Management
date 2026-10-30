@@ -1,6 +1,6 @@
-using FieldServiceManagement.API.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using FieldServiceManagement.API.DTOs.Auth;
 using FieldServiceManagement.API.Models;
@@ -16,16 +16,14 @@ public class JwtService
     {
         _configuration = configuration;
     }
+
     public TokenResponseDto GenerateToken(User user)
     {
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-
             new Claim(ClaimTypes.Name, user.FullName),
-
             new Claim(ClaimTypes.Email, user.Email),
-
             new Claim(ClaimTypes.Role, user.Role)
         };
 
@@ -55,5 +53,12 @@ public class JwtService
             Token = new JwtSecurityTokenHandler().WriteToken(token),
             ExpiresAt = expires
         };
+    }
+
+    public string GenerateRefreshToken()
+    {
+        var randomBytes = new byte[64];
+        RandomNumberGenerator.Fill(randomBytes);
+        return Convert.ToBase64String(randomBytes);
     }
 }

@@ -3,21 +3,15 @@ using FieldServiceManagement.API.DTOs.Auth;
 using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
 using FieldServiceManagement.API.Models;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using FieldServiceManagement.API.DTOs.Auth;
-using Microsoft.IdentityModel.Tokens;
 
 namespace FieldServiceManagement.API.Services;
 
 public class AuthService
 {
     private readonly AppDbContext _context;
-
     private readonly JwtService _jwtService;
-
     private readonly IConfiguration _configuration;
+
     public AuthService(
         AppDbContext context,
         JwtService jwtService,
@@ -30,7 +24,6 @@ public class AuthService
 
     public async Task<bool> RegisterAsync(RegisterUserDto dto)
     {
-
         var emailExists = await _context.Users
             .AnyAsync(u => u.Email == dto.Email);
 
@@ -38,7 +31,6 @@ public class AuthService
         {
             return false;
         }
-
 
         var user = new User
         {
@@ -53,9 +45,7 @@ public class AuthService
         };
 
         _context.Users.Add(user);
-
         await _context.SaveChangesAsync();
-
         return true;
     }
 
@@ -76,13 +66,20 @@ public class AuthService
             return null;
 
         var tokenResult = _jwtService.GenerateToken(user);
+        var refreshToken = _jwtService.GenerateRefreshToken();
+
+        user.RefreshToken = refreshToken;
+        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(
+            double.Parse(_configuration["Jwt:RefreshTokenExpiresInDays"] ?? "7")
+        );
+
+        await _context.SaveChangesAsync();
 
         return new LoginResponseDto
         {
             Token = tokenResult.Token,
-
+            RefreshToken = refreshToken,
             ExpiresAt = tokenResult.ExpiresAt,
-
             User = new UserDto
             {
                 Id = user.Id,

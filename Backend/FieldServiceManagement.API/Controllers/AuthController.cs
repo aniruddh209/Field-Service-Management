@@ -1,7 +1,9 @@
+using FieldServiceManagement.API.Data;
 using FieldServiceManagement.API.DTOs.Auth;
 using FieldServiceManagement.API.Services;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FieldServiceManagement.API.Controllers;
 
@@ -9,16 +11,25 @@ namespace FieldServiceManagement.API.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    private readonly AppDbContext _context;
     private readonly AuthService _authService;
+    private readonly JwtService _jwtService;
+    private readonly IConfiguration _configuration;
     private readonly IValidator<RegisterUserDto> _registerValidator;
     private readonly IValidator<LoginRequestDto> _loginValidator;
 
     public AuthController(
+        AppDbContext context,
         AuthService authService,
+        JwtService jwtService,
+        IConfiguration configuration,
         IValidator<RegisterUserDto> registerValidator,
         IValidator<LoginRequestDto> loginValidator)
     {
+        _context = context;
         _authService = authService;
+        _jwtService = jwtService;
+        _configuration = configuration;
         _registerValidator = registerValidator;
         _loginValidator = loginValidator;
     }
@@ -101,5 +112,49 @@ public class AuthController : ControllerBase
             message = "Login successful.",
             data = result
         });
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> RotationRefreshToken([FromBody] RefreshTokenRequestDto dto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == dto.UserId);
+
+        if (user == null || user.RefreshToken != dto.RefreshToken)
+            return Unauthorized(new { success = false, message = "Invalid refresh token." });
+
+        if (user.RefreshTokenExpiryTime < DateTime.UtcNow)
+            return Unauthorized(new { success = false, message = "Refresh token expired, please log in again." });
+
+        var newAccessToken = _jwtService.GenerateToken(user);
+
+        // Token Rotation
+        var newRefreshToken = _jwtService.GenerateRefreshToken();
+        user.RefreshToken = newRefreshToken;
+        user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(
+            double.Parse(_configuration["Jwt:RefreshTokenExpiresInDays"] ?? "7"));
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            accessToken = newAccessToken.Token,
+            refreshToken = newRefreshToken,
+            expiresAt = newAccessToken.ExpiresAt
+        });
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] LogoutRequestDto dto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == dto.UserId);
+        if (user != null)
+        {
+            user.RefreshToken = null;
+            user.RefreshTokenExpiryTime = null;
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(new { success = true, message = "Logged out successfully." });
     }
 }

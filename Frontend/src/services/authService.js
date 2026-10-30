@@ -2,7 +2,6 @@ import api from "../api/api";
 
 const authService = {
     // LOGIN — POST /api/Auth/login
-    // Backend response: { success, message, data: { token, expiresAt, user: UserDto } }
     async login(credentials, password, expectedRole) {
         let payload;
         if (typeof credentials === "object" && credentials !== null) {
@@ -21,7 +20,6 @@ const authService = {
         try {
             const response = await api.post("/Auth/login", payload);
             const result = response.data;
-            // result = { success: true, message: "...", data: { token, expiresAt, user } }
 
             if (!result?.success) {
                 return {
@@ -35,6 +33,9 @@ const authService = {
 
             if (authData?.token) {
                 localStorage.setItem("authToken", authData.token);
+            }
+            if (authData?.refreshToken) {
+                localStorage.setItem("refreshToken", authData.refreshToken);
             }
             if (authData?.expiresAt) {
                 localStorage.setItem("authExpiresAt", authData.expiresAt);
@@ -73,8 +74,6 @@ const authService = {
     },
 
     // REGISTER — POST /api/Auth/register
-    // Backend expects: { firstName, lastName, email, password, phoneNumber, role }
-    // Backend response: { success, message }
     async register(userData) {
         try {
             const response = await api.post("/Auth/register", userData);
@@ -108,6 +107,11 @@ const authService = {
         return localStorage.getItem("authToken");
     },
 
+    // GET REFRESH TOKEN
+    getRefreshToken() {
+        return localStorage.getItem("refreshToken");
+    },
+
     // GET CURRENT USER
     getCurrentUser() {
         const user = localStorage.getItem("authUser");
@@ -131,8 +135,17 @@ const authService = {
     },
 
     // LOGOUT
-    logout() {
+    async logout() {
+        const user = this.getCurrentUser();
+        if (user?.id) {
+            try {
+                await api.post("/Auth/logout", { userId: Number(user.id) });
+            } catch (e) {
+                console.warn("Server logout notification skipped:", e);
+            }
+        }
         localStorage.removeItem("authToken");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("authUser");
         localStorage.removeItem("authExpiresAt");
     }

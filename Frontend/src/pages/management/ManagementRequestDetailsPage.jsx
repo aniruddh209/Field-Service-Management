@@ -33,16 +33,23 @@ function ManagementRequestDetailsPage() {
   async function load() {
     try {
       setIsLoading(true)
-      const [reqData, histData, reportData] = await Promise.all([
-        getServiceRequestById(id),
-        getStatusHistory(id),
-        getWorkReportByRequestId(id)
-      ])
+      setIsError(false)
+      const reqData = await getServiceRequestById(id)
       if (!reqData) { setIsError(true); return }
       setRequest(reqData)
-      setHistory(histData)
-      setReport(reportData)
-    } catch { setIsError(true) } finally { setIsLoading(false) }
+
+      const [histData, reportData] = await Promise.all([
+        getStatusHistory(id).catch(() => []),
+        getWorkReportByRequestId(id).catch(() => null)
+      ])
+      setHistory(histData || [])
+      setReport(reportData || null)
+    } catch (err) {
+      console.error("Failed to load request details:", err)
+      setIsError(true)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [id])

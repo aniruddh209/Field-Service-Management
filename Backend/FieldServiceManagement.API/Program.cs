@@ -5,9 +5,10 @@ using FieldServiceManagement.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-namespace FieldServiceManagement.API;
 using FluentValidation;
-using FieldServiceManagement.API.Validators.Technicians;
+using Microsoft.AspNetCore.Http.Features;
+
+namespace FieldServiceManagement.API;
 
 public class Program
 {
@@ -15,11 +16,10 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-
         builder.Services.AddControllers();
         builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-
+        builder.Services.AddScoped<IFileService, FileService>();
         builder.Services.AddScoped<AuthService>();
         builder.Services.AddScoped<JwtService>();
         builder.Services.AddScoped<TechnicianService>();
@@ -31,6 +31,10 @@ public class Program
         builder.Services.AddScoped<StockMovementService>();
         builder.Services.AddScoped<NotificationService>();
 
+        builder.Services.Configure<FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = 15 * 1024 * 1024;
+        });
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -52,12 +56,10 @@ public class Program
             });
         builder.Services.AddAuthorization();
 
-
         builder.Services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
                 builder.Configuration.GetConnectionString("DefaultConnection")
             ));
-
 
         builder.Services.AddCors(options =>
         {
@@ -74,7 +76,6 @@ public class Program
 
         var app = builder.Build();
 
-
         if (app.Environment.IsDevelopment())
         {
             app.MapScalarApiReference();
@@ -82,6 +83,7 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+        app.UseStaticFiles();
         app.UseCors("AllowReact");
         app.UseAuthentication();
         app.UseAuthorization();
